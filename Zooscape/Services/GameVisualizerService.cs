@@ -44,15 +44,16 @@ public class GameVisualizerService
                 a.DistanceCovered,
                 a.IsViable,
                 a.TimeInCage,
-                AverageExecutionTime = Cobra.AverageExecutionTime,
-                CurrentTargetPellet = Cobra.CurrentTargetPellet != null ? new { Cobra.CurrentTargetPellet.X, Cobra.CurrentTargetPellet.Y } : null,
-                PersistentPath = Cobra.PersistentPath?.Select(n => new { n.X, n.Y }),
-                ContestedPelletsThisTick = Cobra.ContestedPelletsThisTick.Select(p => new { p.Item1, p.Item2 }),
-                IsInDanger = Cobra.IsInDanger,
-                GameStage = Cobra.GAME_STAGE.ToString(),
-                LastMove = Cobra.LastMove.ToString(),
+                AverageExecutionTime = Elephant.AverageExecutionTime,
+                CurrentTargetPellet = Elephant.CurrentTargetPellet != null ? new { Elephant.CurrentTargetPellet.X, Elephant.CurrentTargetPellet.Y } : null,
+                PersistentPath = Elephant.PersistentPath?.Select(n => new { n.X, n.Y }),
+                ContestedPelletsThisTick = Elephant.ContestedPelletsThisTick.Select(p => new { p.Item1, p.Item2 }),
+                IsInDanger = Elephant.IsInDanger,
+                GameStage = Elephant.GAME_STAGE.ToString(),
+                LastMove = Elephant.LastMove.ToString(),
                 a.Location,
                 a.CurrentDirection,
+                ExecutionTimeExceedCount = Elephant.ExecutionTimeExceedCount
 
 
             }),
@@ -68,8 +69,8 @@ public class GameVisualizerService
                 CurrentPath = z.CurrentPath?.Nodes.Select(n => new { n.Coords.X, n.Coords.Y })
             }),
             Tick = _gameStateService.TickCounter,
-            Width = Cobra.MapWidth,
-            Height = Cobra.MapHeight
+            Width = Elephant.MapWidth,
+            Height = Elephant.MapHeight
         };
 
        

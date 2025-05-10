@@ -205,8 +205,9 @@ using (LogContext.PushProperty("ConsoleOnly", true))
         botTasks.Add(StartOmNomNomDebug());
 
         StartAnimalBot("Gorilla", "G1");
-        StartAnimalBot("Penguin", "P1");
+        //StartAnimalBot("Penguin", "P1");
         StartAnimalBot("Snake", "S1");
+        StartAnimalBot("Cobra", "C1");
 
         // Keep bots running
         await Task.WhenAll(botTasks);

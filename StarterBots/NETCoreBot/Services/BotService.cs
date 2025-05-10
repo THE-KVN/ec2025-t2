@@ -22,7 +22,7 @@ namespace NETCoreBot.Services
             //732 / 1412 / 1233
             //var numberofPellets = gameStateDTO.Cells.Count(c => c.Content == Enums.CellContent.Pellet);
            
-            return Cobra.ProcessState(gameStateDTO, _botId);
+            return Elephant.ProcessState(gameStateDTO, _botId);
 
         }
     }

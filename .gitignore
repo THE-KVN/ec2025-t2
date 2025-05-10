@@ -1,21 +1,51 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
-################################################################################
-/.vs
-/.vs/Zooscape
-/.vs/Zooscape/CopilotIndices/17.13.439.2385/CodeChunks.db
-/.vs/Zooscape/CopilotIndices/17.13.439.2385/SemanticSymbols.db
-/Application/bin
-/Application/obj
-/CloudIntegration/bin
-/CloudIntegration/obj
-/ReferenceBot/bin
-/ReferenceBot/obj
-/S3Logger/bin
-/S3Logger/obj
-/SignalRHub/bin
-/SignalRHub/obj
-/Zooscape/bin
-/Zooscape/obj
-/ZooscapeTests/bin
-/ZooscapeTests/obj
+﻿# User-specific files
+*.suo
+*.user
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Mac detritus
+.DS_Store
+
+# Windows detritus
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+riderModule.iml
+
+# Visual Studio
+.vs/
+*.[Cc]ache
+!?*.[Cc]ache/
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets

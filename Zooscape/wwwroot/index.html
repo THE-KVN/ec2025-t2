@@ -69,7 +69,7 @@
                     <th>Distance Covered</th>
                     <th>Is Viable</th>
                     <th>Location</th>
-                    <th>CurrentDirection</th>
+                    <th>ExecutionTimeExceedCount</th>
                     <th>AverageExecutionTime</th>
                 </tr>
             </thead>
@@ -195,7 +195,7 @@
                         <td>${animal.distanceCovered}</td>
                         <td>${animal.isViable}</td>
                         <td>(${animal.location.x}, ${animal.location.y})</td>
-                        <td>${animal.currentDirection}</td>
+                        <td>${animal.executionTimeExceedCount}</td>
                         <td>${animal.averageExecutionTime}</td>
                     `;
                 animalTableBody.appendChild(row);

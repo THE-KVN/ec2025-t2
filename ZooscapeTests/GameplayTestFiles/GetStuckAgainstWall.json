@@ -1,0 +1,52 @@
+﻿{
+	"Input": {
+		"Map": [
+			"1112111",
+			"1422241",
+			"1212121",
+			"2223222",
+			"1212121",
+			"1422241",
+			"1112111"
+		],
+		"AnimalIds": [
+			"63fe09b5-7995-4b9d-a74b-4acec33c5867",
+			"efb8fa71-fe63-4428-97ce-3a9d50f51822",
+			"8e44ca01-65de-4f28-a141-bd609e7fc33d",
+			"e01c61f4-dd62-44c8-bb23-7ca525cfae0a"
+		],
+		"Zookeepers": 0,
+		"Ticks": 10,
+		"Actions": {
+			"1": [
+				{
+					"BotId": "63fe09b5-7995-4b9d-a74b-4acec33c5867",
+					"Action": "Right"
+				}
+			],
+			"4": [
+				{
+					"BotId": "63fe09b5-7995-4b9d-a74b-4acec33c5867",
+					"Action": "Up"
+				}
+			]
+		}
+	},
+	"ExpectedState": {
+		"Animals": {
+			"63fe09b5-7995-4b9d-a74b-4acec33c5867": {
+				"Location": {
+					"X": 4,
+					"Y": 1
+				},
+				"CurrentDirection": "Up",
+				"Score": 30,
+				"TicksOnSpawn": 1,
+				"CapturedCounter": 0,
+				"DistanceCovered": 3,
+				"IsViable": true
+			}
+		},
+		"TickCounter": 10
+	}
+}

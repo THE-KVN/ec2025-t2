@@ -1,0 +1,32 @@
+services:
+  engine:
+    build:
+      context: .
+    healthcheck:
+      test: curl http://localhost:5000/bothub
+      interval: 50ms
+      start_interval: 50ms
+      start_period: 50ms
+      retries: 20
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logs:/var/log/zooscape
+    environment:
+      GameSettings__TickDuration: ${TICK_DURATION:-200}
+      GameSettings__MaxTicks: ${MAX_TICKS:-1000}
+      GameSettings__StartGameTimeout: 9999
+      GameSettings__WorldMap: ${WORLD_MAP:-generate:51|6|0.0|0.5}
+      GameSettings__Seed: ${SEED:-0}
+      GameLogsConfiguration__FullLogsEnabled: ${FULL_LOGS:-false}
+      GameLogsConfiguration__DiffLogsEnabled: ${DIFF_LOGS:-false}
+      ENVIRONMENT: Development
+    
+  refbot:
+    build: ./ReferenceBot
+    depends_on:
+      engine:
+        condition: service_healthy
+    environment:
+      RUNNER_IPV4: http://engine
+      BOT_NICKNAME: RefBot

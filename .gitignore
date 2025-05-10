@@ -1,0 +1,21 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+/.vs
+/.vs/Zooscape
+/.vs/Zooscape/CopilotIndices/17.13.439.2385/CodeChunks.db
+/.vs/Zooscape/CopilotIndices/17.13.439.2385/SemanticSymbols.db
+/Application/bin
+/Application/obj
+/CloudIntegration/bin
+/CloudIntegration/obj
+/ReferenceBot/bin
+/ReferenceBot/obj
+/S3Logger/bin
+/S3Logger/obj
+/SignalRHub/bin
+/SignalRHub/obj
+/Zooscape/bin
+/Zooscape/obj
+/ZooscapeTests/bin
+/ZooscapeTests/obj

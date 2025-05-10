@@ -1,0 +1,304 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zooscape Game State</title>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            display: flex;
+            overflow: auto;
+        }
+
+        #gameCanvas {
+            border: 1px solid blue;
+        }
+
+        #tables {
+            margin-left: 20px;
+        }
+
+        #tickCounter {
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+
+        #animalTable, #zookeeperTable, animalTableM {
+            margin-left: 20px;
+            border-collapse: collapse;
+        }
+
+            #animalTable th, #animalTable td,
+            #zookeeperTable th, #zookeeperTable td,
+            #animalTableM th, #animalTableM td {
+                border: 1px solid white;
+                padding: 8px;
+            }
+
+        .wall-cell {
+            background-color: black;
+            border-style: dotted;
+            border: 1px blue;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="1248" height="1708"></canvas>
+
+    <div id="tables">
+        <div id="tickCounter">Tick: 0</div>
+        <div id="gameStage">Game Stage: 0</div>
+        <table id="zookeeperTable">
+            <thead>
+                <tr>
+                    <th>Nickname</th>
+                    <th>Current Target</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <br />
+        <table id="animalTable">
+            <thead>
+                <tr>
+                    <th>Nickname</th>
+                    <th>Score</th>
+                    <th>Captured Counter</th>
+                    <th>Distance Covered</th>
+                    <th>Is Viable</th>
+                    <th>Location</th>
+                    <th>CurrentDirection</th>
+                    <th>AverageExecutionTime</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+
+
+
+    </div>
+
+    <!-- Sprites -->
+    <img id="zookeeperSprite" src="Content/sprites/PacMan.png" style="display:none;" />
+    <img id="pelletSprite" src="Content/sprites/BigCoin.png" style="display:none;" />
+    <img id="blueBotSprite" src="Content/sprites/blueGhost.png" style="display:none;" />
+    <img id="greenBotSprite" src="Content/sprites/greenGhost.png" style="display:none;" />
+    <img id="redBotSprite" src="Content/sprites/redGhost.png" style="display:none;" />
+    <img id="yellowBotSprite" src="Content/sprites/yellowGhost.png" style="display:none;" />
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/5.0.11/signalr.min.js"></script>
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("http://localhost:5433/bothub")
+            .build();
+
+        const animalSpriteMap = {};
+        let spriteAssigned = false;
+
+        // These MUST be global so all functions can use them
+        const axisOffsetX = 1;
+        const axisOffsetY = 1;
+        const cellSize = 24;
+
+        connection.on("ReceiveGameState", (gameState) => {
+            const canvas = document.getElementById("gameCanvas");
+            const context = canvas.getContext("2d");
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+
+
+            const mapWidth = gameState.width;
+            const mapHeight = gameState.height;
+
+            // Draw X-axis numbers (across top)
+            context.fillStyle = "white";
+            context.font = "12px Arial";
+            for (let x = 0; x < mapWidth; x++) {
+                context.fillText(x, (axisOffsetX + x) * cellSize + 6, 16); // draw above grid cell
+            }
+
+            // Draw Y-axis numbers (down left side)
+            for (let y = 0; y < mapHeight; y++) {
+                context.fillText(y, 4, (axisOffsetY + y) * cellSize + 18); // draw left of grid cell
+            }
+
+
+
+
+            const anyAnimalInDanger = gameState.animals.some(animal => animal.isInDanger);
+            document.body.style.backgroundColor = anyAnimalInDanger ? 'red' : 'black';
+
+           
+            document.getElementById("tickCounter").innerText = `Tick: ${gameState.tick}`;
+
+            //console.log(gameState);
+
+            gameState.animals.forEach((animal) => {
+                if (!(animal.nickname in animalSpriteMap)) {
+                    const currentCount = Object.keys(animalSpriteMap).length;
+                    animalSpriteMap[animal.nickname] = currentCount;
+                }
+            });
+
+
+            gameState.cells.forEach(cell => drawCell(context, cell));
+
+            const zookeeperTableBody = document.getElementById("zookeeperTable").querySelector("tbody");
+            zookeeperTableBody.innerHTML = "";
+            gameState.zookeepers.forEach(zookeeper => {
+                context.drawImage(document.getElementById("zookeeperSprite"), (axisOffsetX + zookeeper.x) * 24, (axisOffsetY + zookeeper.y) * 24, 24, 24);
+
+                if (zookeeper.currentPath) {
+                    zookeeper.currentPath.forEach(path => {
+                        context.fillStyle = "#f3d885";
+                        context.fillRect((axisOffsetX + path.x) * 24, (axisOffsetY +path.y) * 24, 24, 24);
+                    });
+                }
+
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                        <td>${zookeeper.nickname}</td>
+                        <td>${zookeeper.currentTargetId ? zookeeper.currentTargetId.nickname : 'None'}</td>
+                    `;
+                zookeeperTableBody.appendChild(row);
+            });
+
+            const animalTableBody = document.getElementById("animalTable").querySelector("tbody");
+            animalTableBody.innerHTML = "";
+
+            const sortedAnimals = gameState.animals.slice().sort((a, b) => b.score - a.score);
+            sortedAnimals.forEach(animal => {
+                if (animal.persistentPath) {
+                    animal.persistentPath.forEach(path => drawCurrentPath(context, path.x, path.y, gameState));
+                }
+
+                if (animal.contestedPelletsThisTick) {
+                    animal.contestedPelletsThisTick.forEach(path => drawContestedPellets(context, path.item1, path.item2, gameState));
+                }
+
+                if (animal.currentTargetPellet) {
+                    drawCurrentTargetPellet(context, animal.currentTargetPellet);
+                }
+
+                const spriteIndex = animalSpriteMap[animal.nickname];
+                drawAnimal(context, animal, spriteIndex);
+
+                const row = document.createElement("tr");
+                row.style.backgroundColor = getColorForAnimal(animal.nickname);
+                row.innerHTML = `
+                        <td>${animal.nickname}</td>
+                        <td>${animal.score}</td>
+                        <td>${animal.capturedCounter}</td>
+                        <td>${animal.distanceCovered}</td>
+                        <td>${animal.isViable}</td>
+                        <td>(${animal.location.x}, ${animal.location.y})</td>
+                        <td>${animal.currentDirection}</td>
+                        <td>${animal.averageExecutionTime}</td>
+                    `;
+                animalTableBody.appendChild(row);
+
+
+                document.getElementById("gameStage").innerText = `Stage: ${animal.gameStage}`;
+            });
+        });
+
+        connection.start().catch(err => console.error(err.toString()));
+
+        function drawCurrentTargetPellet(context, pellet) {
+            context.fillStyle = "blue";
+            context.fillRect((axisOffsetX + pellet.x) * 24, (axisOffsetY +pellet.y) * 24, 24, 24);
+            context.drawImage(document.getElementById("pelletSprite"), (axisOffsetX + pellet.x) * 24, (axisOffsetY + pellet.y) * 24, 24, 24);
+        }
+
+        function drawCurrentPath(context, x, y, gamestate) {
+
+            const anyAnimalInDanger = gamestate.animals.some(animal => animal.isInDanger);
+            context.fillStyle = anyAnimalInDanger ? 'yellow' : 'lightblue';
+
+            context.fillRect((axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+
+            const cell = gamestate.cells.find(c => c.x === x && c.y === y);
+            if (cell && cell.content === 2) {
+                context.drawImage(document.getElementById("pelletSprite"), (axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+            }
+        }
+
+        function drawContestedPellets(context, x, y, gamestate) {
+            context.fillStyle = "red";
+            context.fillRect((axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+
+            const cell = gamestate.cells.find(c => c.x === x && c.y === y);
+            if (cell && cell.content === 2) {
+                context.drawImage(document.getElementById("pelletSprite"), (axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+            }
+        }
+
+        function getColorForAnimal(nickname) {
+            switch (animalSpriteMap[nickname]) {
+                case 0: return "blue";
+                case 1: return "green";
+                case 2: return "red";
+                case 3: return "orange";
+                default: return "white";
+            }
+        }
+
+        function drawCell(context, cell) {
+            const sprite = getSpriteForCellContent(cell.content);
+            if (sprite) {
+                context.drawImage(sprite, (axisOffsetX + cell.x) * 24, (axisOffsetY + cell.y) * 24, 24, 24);
+            } else {
+                context.fillStyle = getColorForCellContent(cell.content);
+                context.fillRect((axisOffsetX + cell.x) * 24, (axisOffsetY + cell.y) * 24, 24, 24);
+                if (cell.content === 1) {
+                    context.strokeStyle = "blue";
+                    context.lineWidth = 2;
+                    context.strokeRect((axisOffsetX + cell.x) * 24, (axisOffsetY +cell.y) * 24, 24, 24);
+                }
+            }
+        }
+
+        function drawAnimal(context, animal, spriteIndex) {
+            const sprite = getSpriteForAnimal(spriteIndex);
+            if (sprite) {
+                context.drawImage(sprite, (axisOffsetX + animal.x) * 24, (axisOffsetY +animal.y) * 24, 24, 24);
+            }
+        }
+
+        function getSpriteForCellContent(cellContent) {
+            switch (cellContent) {
+                case 0: return null;
+                case 1: return null;
+                case 2: return document.getElementById("pelletSprite");
+                case 3: return null;
+                case 4: return null;
+                default: return null;
+            }
+        }
+
+        function getSpriteForAnimal(index) {
+            switch (index) {
+                case 0: return document.getElementById("blueBotSprite");
+                case 1: return document.getElementById("greenBotSprite");
+                case 2: return document.getElementById("redBotSprite");
+                case 3: return document.getElementById("yellowBotSprite");
+                default: return null;
+            }
+        }
+
+        function getColorForCellContent(cellContent) {
+            switch (cellContent) {
+                case 0: return "black";
+                case 1: return "black";
+                case 2: return "yellow";
+                case 3: return "black";
+                case 4: return "grey";
+                default: return "black";
+            }
+        }
+    </script>
+</body>
+</html>

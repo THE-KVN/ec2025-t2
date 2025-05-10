@@ -1,0 +1,12 @@
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\bin\Debug\net8.0\Zooscape.Domain.deps.json
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\bin\Debug\net8.0\Zooscape.Domain.dll
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\bin\Debug\net8.0\Zooscape.Domain.pdb
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\Zooscape.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\Zooscape.Domain.AssemblyInfoInputs.cache
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\Zooscape.Domain.AssemblyInfo.cs
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\Zooscape.Domain.csproj.CoreCompileInputs.cache
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\Zooscape.Domain.sourcelink.json
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\Zooscape.Domain.dll
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\refint\Zooscape.Domain.dll
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\Zooscape.Domain.pdb
+C:\Users\Kevin Olckers\Documents\GitHub\2025-Zooscape\Domain\obj\Debug\net8.0\ref\Zooscape.Domain.dll

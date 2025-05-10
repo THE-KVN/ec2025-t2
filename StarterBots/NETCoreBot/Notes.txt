@@ -1,0 +1,22 @@
+﻿
+
+General Imporvements
+
+
+// Apply Parameter
+-- Tune Mid Game Parameters
+
+// Respawn Logic
+
+// Zookeeper Avoidance Logic
+-- Use A-star to calculate how far the neaerest zookeeper is
+-- Multiple Zoopers : Animal keep swithing direction to opposite portal but then walks right into another zookeeper or keep changin paths until caught 
+
+// Path Validation
+
+// Find target
+-- If you're behind, become riskier (contest more). If you're ahead, play safer. (might not work but review it)
+
+// Find path to target
+
+// Compute next move

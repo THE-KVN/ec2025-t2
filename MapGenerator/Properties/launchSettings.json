@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MapGenerator": {
+      "commandName": "Project",
+      "commandLineArgs": "--size 21 --smoothness 0.5 --openness 0.25 --teleports 4 --seed 1"
+    }
+  }
+}

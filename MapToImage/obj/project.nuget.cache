@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "l6dlpqGCmus=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Kevin Olckers\\Documents\\GitHub\\2025-Zooscape\\MapToImage\\MapToImage.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Kevin Olckers\\.nuget\\packages\\skiasharp\\3.116.1\\skiasharp.3.116.1.nupkg.sha512",
+    "C:\\Users\\Kevin Olckers\\.nuget\\packages\\skiasharp.nativeassets.macos\\3.116.1\\skiasharp.nativeassets.macos.3.116.1.nupkg.sha512",
+    "C:\\Users\\Kevin Olckers\\.nuget\\packages\\skiasharp.nativeassets.win32\\3.116.1\\skiasharp.nativeassets.win32.3.116.1.nupkg.sha512"
+  ],
+  "logs": []
+}

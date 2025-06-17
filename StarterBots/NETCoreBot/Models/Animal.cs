@@ -11,4 +11,8 @@ public class Animal
     public int CapturedCounter { get; set; }
     public int DistanceCovered { get; set; }
     public bool IsViable { get; set; }
+
+    public float CurrentMultiplier { get; set; } = 1.0f;
+    public int TicksSinceLastScore { get; set; } = 0;
+
 }

@@ -68,7 +68,7 @@
                     <th>Captured Counter</th>
                     <th>Distance Covered</th>
                     <th>Is Viable</th>
-                    <th>Location</th>
+                    <th>CurrentMultiplier</th>
                     <th>ExecutionTimeExceedCount</th>
                     <th>AverageExecutionTime</th>
                 </tr>
@@ -134,7 +134,7 @@
            
             document.getElementById("tickCounter").innerText = `Tick: ${gameState.tick}`;
 
-            //console.log(gameState);
+            console.log(gameState);
 
             gameState.animals.forEach((animal) => {
                 if (!(animal.nickname in animalSpriteMap)) {
@@ -144,44 +144,52 @@
             });
 
 
+            
             gameState.cells.forEach(cell => drawCell(context, cell));
-
-            const zookeeperTableBody = document.getElementById("zookeeperTable").querySelector("tbody");
-            zookeeperTableBody.innerHTML = "";
-            gameState.zookeepers.forEach(zookeeper => {
-                context.drawImage(document.getElementById("zookeeperSprite"), (axisOffsetX + zookeeper.x) * 24, (axisOffsetY + zookeeper.y) * 24, 24, 24);
-
-                if (zookeeper.currentPath) {
-                    zookeeper.currentPath.forEach(path => {
-                        context.fillStyle = "#f3d885";
-                        context.fillRect((axisOffsetX + path.x) * 24, (axisOffsetY +path.y) * 24, 24, 24);
-                    });
-                }
-
-                const row = document.createElement("tr");
-                row.innerHTML = `
-                        <td>${zookeeper.nickname}</td>
-                        <td>${zookeeper.currentTargetId ? zookeeper.currentTargetId.nickname : 'None'}</td>
-                    `;
-                zookeeperTableBody.appendChild(row);
-            });
+            
 
             const animalTableBody = document.getElementById("animalTable").querySelector("tbody");
             animalTableBody.innerHTML = "";
 
             const sortedAnimals = gameState.animals.slice().sort((a, b) => b.score - a.score);
             sortedAnimals.forEach(animal => {
+                
+
+                //if (animal.currentTargetPellet) {
+                //    drawCurrentTargetPellet(context, animal.currentTargetPellet);
+                //}
+
+
+                //if (animal.bestCluster && animal.bestCluster.cells) {
+                //    animal.bestCluster.cells.forEach(path => drawCluster(context, path.x, path.y, gameState));
+                //}
+
+                //if (animal.bestCluster && animal.bestCluster.entryPoint) {
+                //    drawCurrentTargetPellet(context, animal.bestCluster.entryPoint);
+                //}
+
+                //if (animal.bestCluster && animal.bestCluster.path) {
+                //    animal.bestCluster.path.forEach(path => drawCurrentPath(context, path.x, path.y, gameState));
+                //}
+
+                //if (animal.contestedPelletsThisTick) {
+                //    animal.contestedPelletsThisTick.forEach(path => drawContestedPellets(context, path.item1, path.item2, gameState));
+                //}
+
+                //if (animal.corridorCells) {
+                //    animal.corridorCells.forEach(path => drawCorridorPellets(context, path.item1, path.item2, gameState));
+                //}
+
+
+
+                if (animal.safetyNetMap && animal.safetyNetMap.length > 0) {
+                    animal.safetyNetMap.forEach(map => drawSafetyNetMap(context, map.item1, map.item2, gameState));
+                }
+
                 if (animal.persistentPath) {
                     animal.persistentPath.forEach(path => drawCurrentPath(context, path.x, path.y, gameState));
                 }
 
-                if (animal.contestedPelletsThisTick) {
-                    animal.contestedPelletsThisTick.forEach(path => drawContestedPellets(context, path.item1, path.item2, gameState));
-                }
-
-                if (animal.currentTargetPellet) {
-                    drawCurrentTargetPellet(context, animal.currentTargetPellet);
-                }
 
                 const spriteIndex = animalSpriteMap[animal.nickname];
                 drawAnimal(context, animal, spriteIndex);
@@ -194,7 +202,7 @@
                         <td>${animal.capturedCounter}</td>
                         <td>${animal.distanceCovered}</td>
                         <td>${animal.isViable}</td>
-                        <td>(${animal.location.x}, ${animal.location.y})</td>
+                        <td>${animal.currentMultiplier}</td>
                         <td>${animal.executionTimeExceedCount}</td>
                         <td>${animal.averageExecutionTime}</td>
                     `;
@@ -203,6 +211,33 @@
 
                 document.getElementById("gameStage").innerText = `Stage: ${animal.gameStage}`;
             });
+
+
+
+            const zookeeperTableBody = document.getElementById("zookeeperTable").querySelector("tbody");
+            zookeeperTableBody.innerHTML = "";
+            gameState.zookeepers.forEach(zookeeper => {
+                context.drawImage(document.getElementById("zookeeperSprite"), (axisOffsetX + zookeeper.x) * 24, (axisOffsetY + zookeeper.y) * 24, 24, 24);
+
+                //if (zookeeper.currentPath) {
+                //    zookeeper.currentPath.forEach(path => {
+                //        context.fillStyle = "#f3d885";
+                //        context.fillRect((axisOffsetX + path.x) * 24, (axisOffsetY +path.y) * 24, 24, 24);
+                //    });
+                //}
+
+                const row = document.createElement("tr");
+                row.innerHTML = `
+            <td>${zookeeper.nickname}</td>
+            <td>${zookeeper.currentTargetId ? zookeeper.currentTargetId.nickname : 'None'}</td>
+        `;
+                zookeeperTableBody.appendChild(row);
+            });
+
+
+            
+
+
         });
 
         connection.start().catch(err => console.error(err.toString()));
@@ -235,6 +270,42 @@
                 context.drawImage(document.getElementById("pelletSprite"), (axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
             }
         }
+
+        function drawCluster(context, x, y, gamestate) {
+            context.fillStyle = "grey";
+            context.fillRect((axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+
+            const cell = gamestate.cells.find(c => c.x === x && c.y === y);
+            if (cell && cell.content === 2) {
+                context.drawImage(document.getElementById("pelletSprite"), (axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+            }
+        }
+
+        function drawCorridorPellets(context, x, y, gamestate) {
+            context.fillStyle = "blue";
+            context.fillRect((axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+
+            const cell = gamestate.cells.find(c => c.x === x && c.y === y);
+            if (cell && cell.content === 2) {
+                context.drawImage(document.getElementById("pelletSprite"), (axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+            }
+        }
+
+        function drawSafetyNetMap(context, x, y, gamestate) {
+            context.fillStyle = "green";
+            context.fillRect((axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+
+            const cell = gamestate.cells.find(c => c.x === x && c.y === y);
+            if (cell && cell.content === 2) {
+                context.drawImage(document.getElementById("pelletSprite"), (axisOffsetX + x) * 24, (axisOffsetY + y) * 24, 24, 24);
+            }
+            if (cell && cell.content === 4) {
+                context.fillStyle = "grey";
+                context.fillRect((axisOffsetX + cell.x) * 24, (axisOffsetY + cell.y) * 24, 24, 24);
+            }
+        }
+
+
 
         function getColorForAnimal(nickname) {
             switch (animalSpriteMap[nickname]) {

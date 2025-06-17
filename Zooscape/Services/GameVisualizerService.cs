@@ -44,16 +44,20 @@ public class GameVisualizerService
                 a.DistanceCovered,
                 a.IsViable,
                 a.TimeInCage,
-                AverageExecutionTime = Elephant.AverageExecutionTime,
-                CurrentTargetPellet = Elephant.CurrentTargetPellet != null ? new { Elephant.CurrentTargetPellet.X, Elephant.CurrentTargetPellet.Y } : null,
-                PersistentPath = Elephant.PersistentPath?.Select(n => new { n.X, n.Y }),
-                ContestedPelletsThisTick = Elephant.ContestedPelletsThisTick.Select(p => new { p.Item1, p.Item2 }),
-                IsInDanger = Elephant.IsInDanger,
-                GameStage = Elephant.GAME_STAGE.ToString(),
-                LastMove = Elephant.LastMove.ToString(),
+                AverageExecutionTime = "0",
+                CurrentTargetPellet = Rabbit.PersistentTarget != null ? new { Rabbit.PersistentTarget.X, Rabbit.PersistentTarget.Y } : null,
+                PersistentPath = Rabbit.PersistentPath?.Select(n => new { n.X, n.Y }),
+                ContestedPelletsThisTick = Rabbit.CONTESTED_CELLS_MAP.Select(p => new { p.Item1, p.Item2 }),
+                CorridorCells = Rabbit.CORRIDOR_CELLS_MAP.Select(c => new { c.Item1, c.Item2 }),
+                IsInDanger = Rabbit.IsInDanger,
+                GameStage = Rabbit.GAME_STAGE.ToString(),
+                LastMove = Rabbit.LastMove.ToString(),
                 a.Location,
                 a.CurrentDirection,
-                ExecutionTimeExceedCount = Elephant.ExecutionTimeExceedCount
+                ExecutionTimeExceedCount = Rabbit.ExecutionTimeExceedCount,
+                CurrentMultiplier = a.CurrentMultiplier,
+                BestCluster = Rabbit.BestCluster,
+                SafetyNetMap = Rabbit.SAFETY_NET_MAP?.Select(c => new { c.Item1, c.Item2 }),
 
 
             }),
@@ -69,8 +73,8 @@ public class GameVisualizerService
                 CurrentPath = z.CurrentPath?.Nodes.Select(n => new { n.Coords.X, n.Coords.Y })
             }),
             Tick = _gameStateService.TickCounter,
-            Width = Elephant.MapWidth,
-            Height = Elephant.MapHeight
+            Width = Rabbit.MapWidth,
+            Height = Rabbit.MapHeight
         };
 
        

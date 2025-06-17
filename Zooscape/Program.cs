@@ -207,8 +207,8 @@ using (LogContext.PushProperty("ConsoleOnly", true))
         StartAnimalBot("Gorilla", "G1");
         //StartAnimalBot("Penguin", "P1");
         StartAnimalBot("Snake", "S1");
-        StartAnimalBot("Cobra", "C1");
-
+        //StartAnimalBot("Cobra", "C1");
+        StartAnimalBot("Elephant", "E1");
         // Keep bots running
         await Task.WhenAll(botTasks);
 
@@ -361,7 +361,7 @@ using (LogContext.PushProperty("ConsoleOnly", true))
 
             if (botCommand != null)
             {
-                Console.WriteLine($"[{nickname}] Sent Command {botCommand.Action}");
+                //Console.WriteLine($"[{nickname}] Sent Command {botCommand.Action}");
                 await connection.SendAsync("BotCommand", botCommand);
             }
 

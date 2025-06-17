@@ -12,44 +12,53 @@ public class SignalREventDispatcher(IHubContext<BotHub> hubContext) : IEventDisp
     public async Task Dispatch<TEvent>(TEvent gameEvent)
         where TEvent : class
     {
+
         if (gameEvent is GameStateEvent gameStateEvent)
         {
-            var gameState = new
-            {
-                cells = ConvertCellsToSerializable(gameStateEvent.GameState.World.Cells),
-                animals = gameStateEvent.GameState.Animals.Values.Select(a => new
-                {
-                    a.Id,
-                    a.Nickname,
-                    a.Location.X,
-                    a.Location.Y,
-                    //a.SpawnPoint.X,
-                    //a.SpawnPoint.Y,
-                    a.Score,
-                    a.CapturedCounter,
-                    a.DistanceCovered,
-                    a.IsViable,
-                    a.TimeInCage,
-                    a._commandQueue,
-                }),
-                zookeepers = gameStateEvent.GameState.Zookeepers.Values.Select(z => new
-                {
-                    z.Id,
-                    z.Nickname,
-                    z.Location.X,
-                    z.Location.Y,
-                    //z.SpawnPoint.X,
-                    //z.SpawnPoint.Y,
-                    z.CurrentDirection,
-                    z.TicksSinceTargetCalculated,
-                    CurrentTargetId = z.CurrentTarget,
-                    CurrentPath = z.CurrentPath?.Nodes.Select(n => new { n.Coords.X, n.Coords.Y })
-                }),
-                Tick = gameStateEvent.GameState.TickCounter,
-            };
-
-            await hubContext.Clients.All.SendAsync(OutgoingMessages.GameState, gameState);
+            var payload = new GameState(gameStateEvent.GameState);
+            await hubContext.Clients.All.SendAsync(OutgoingMessages.GameState, payload);
         }
+
+        //if (gameEvent is GameStateEvent gameStateEvent)
+        //{
+        //    var gameState = new
+        //    {
+        //        cells = ConvertCellsToSerializable(gameStateEvent.GameState.World.Cells),
+        //        animals = gameStateEvent.GameState.Animals.Values.Select(a => new
+        //        {
+        //            a.Id,
+        //            a.Nickname,
+        //            a.Location.X,
+        //            a.Location.Y,
+        //            a.SpawnPoint.X
+        //            a.SpawnPoint.Y,
+        //            a.Score,
+        //            a.CapturedCounter,
+        //            a.DistanceCovered,
+        //            a.IsViable,
+        //            a.TimeInCage,
+        //            a._commandQueue,
+        //            a.CurrentMultiplier,
+        //            a.TicksSinceLastScore,
+        //        }),
+        //        zookeepers = gameStateEvent.GameState.Zookeepers.Values.Select(z => new
+        //        {
+        //            z.Id,
+        //            z.Nickname,
+        //            z.Location.X,
+        //            z.Location.Y,
+        //            //z.SpawnPoint.X,
+        //            //z.SpawnPoint.Y,
+        //            z.CurrentDirection,
+        //            z.TicksSinceTargetCalculated,
+        //            CurrentTargetId = z.CurrentTarget,
+        //            CurrentPath = z.CurrentPath?.Nodes.Select(n => new { n.Coords.X, n.Coords.Y })
+        //        }),
+        //        Tick = gameStateEvent.GameState.TickCounter,
+        //    };
+
+        //    await hubContext.Clients.All.SendAsync(OutgoingMessages.GameState, gameState);
+        //}
     }
 
 

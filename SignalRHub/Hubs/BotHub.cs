@@ -155,15 +155,15 @@ public class BotHub : Hub
             return;
         }
 
-        if (bot.Nickname == "OmNomNom")
-        {
-            _logger.LogError(
-            "Command ({action}) enqueued for bot ({botId}). Queue length: {queueLength}",
-            botCommand.Action,
-            bot.Nickname,
-            enqueueResult.Value
-        );
-        }
+        //if (bot.Nickname == "OmNomNom")
+        //{
+        //    _logger.LogError(
+        //    "Command ({action}) enqueued for bot ({botId}). Queue length: {queueLength}",
+        //    botCommand.Action,
+        //    bot.Nickname,
+        //    enqueueResult.Value
+        //);
+        //}
         
     }
 

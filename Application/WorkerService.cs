@@ -157,6 +157,20 @@ public class WorkerService : BackgroundService
 
             _gameStateService.TickCounter++;
 
+            //mine
+            foreach (var (_, animal) in _gameStateService.Animals)
+            {
+                animal.TicksSinceLastScore++;
+            }
+
+            ////Step 0b: Add additional zookeepers dynamically
+            //if (_gameStateService.TickCounter == 100 ||
+            //    (_gameStateService.TickCounter > 100 && (_gameStateService.TickCounter - 100) % 300 == 0))
+            //{
+            //    _logger.LogInformation($"Tick {_gameStateService.TickCounter}: Adding a new zookeeper");
+            //    _gameStateService.AddZookeeper();
+            //}
+
             if (_gameLogsConfig.FullLogsEnabled)
                 await _logStateEventDispatcher.Dispatch(new GameStateEvent(_gameStateService));
 
@@ -168,6 +182,8 @@ public class WorkerService : BackgroundService
             var animalsWithoutCommands = new List<IAnimal>();
             foreach (var (_, animal) in _gameStateService.Animals)
             {
+                
+
                 var command = animal.GetNextCommand();
 
                 if (command == null)
@@ -287,6 +303,34 @@ public class WorkerService : BackgroundService
             animal.SetScore(animal.Score + _gameSettings.PointsPerPellet);
             _gameStateService.World.SetCellContents(animal.Location, CellContents.Empty);
         }
+
+        //if (_gameStateService.World.GetCellContents(animal.Location) == CellContents.Pellet)
+        //{
+        //    var streakSettings = _gameSettings.ScoreStreak;
+
+        //    if (animal.TicksSinceLastScore <= streakSettings.ResetGrace)
+        //    {
+        //        animal.CurrentMultiplier *= (float)streakSettings.MultiplierGrowthFactor;
+        //        animal.CurrentMultiplier = Math.Min(animal.CurrentMultiplier, streakSettings.Max);
+        //    }
+        //    else
+        //    {
+        //        animal.CurrentMultiplier = 1.0f;
+        //    }
+
+        //    int streakedScore = (int)Math.Round(_gameSettings.PointsPerPellet * animal.CurrentMultiplier);
+        //    animal.SetScore(animal.Score + streakedScore);
+
+        //    // Reset streak tracker
+        //    animal.TicksSinceLastScore = 0;
+
+        //    //_logger.LogError($"{animal.Nickname} collected a pellet with multiplier {animal.CurrentMultiplier:F2} (Score +{streakedScore})");
+
+
+        //    // Remove pellet
+        //    _gameStateService.World.SetCellContents(animal.Location, CellContents.Empty);
+        //}
+
 
         // Did the animal run into a zookeeper?
         if (_gameStateService.Zookeepers.Any(z => z.Value.Location == animal.Location))

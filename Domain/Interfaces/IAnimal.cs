@@ -23,6 +23,10 @@ public interface IAnimal
     public int TimeInCage { get; } // Add this property
     public AnimalQueue<AnimalCommand> _commandQueue { get; } // Add this property
 
+    //this is mine
+
+    public float CurrentMultiplier { get; set; }
+    public int TicksSinceLastScore { get; set; }
 
 
     /// <summary>

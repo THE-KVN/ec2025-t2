@@ -24,6 +24,11 @@ public class Animal : IAnimal
     public AnimalCommand FirstCommand { get; set; }
     public int TimeInCage { get; private set; }
 
+    //this is mine 
+    public float CurrentMultiplier { get; set; } = 1.0f;
+    public int TicksSinceLastScore { get; set; } = 0;
+
+
     AnimalQueue<AnimalCommand> IAnimal._commandQueue => _commandQueue;
 
     public Animal(Guid id, string nickname, GridCoords spawnPoint, int queueSize)

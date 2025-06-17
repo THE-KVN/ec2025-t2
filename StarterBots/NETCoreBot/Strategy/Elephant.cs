@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Text;
@@ -24,6 +25,10 @@ namespace NETCoreBot.Strategy
         public static Cell? PersistentTarget { get; set; } = null;
         public static List<ElephantNode>? PersistentPath { get; set; } = null;
         public static double? PersistentPathScore = null;
+
+        public static List<ElephantNode>? OriginalPath { get; set; } = null;
+
+
         public static Dictionary<(int, int), int> VisitedCounts { get; set; } = new Dictionary<(int, int), int>();
         public static readonly Queue<(int, int)> RecentPositions = new Queue<(int, int)>();
         public static int stuckCounter = 0;
@@ -45,6 +50,9 @@ namespace NETCoreBot.Strategy
         public static HashSet<(int, int)> ContestedPelletsThisTick = new();
         public static int breakoutCounter = 0;
         public static (int X, int Y)? LastSentPosition = null;
+
+
+
 
 
         public static GameState GAME_STATE { get; set; } = new GameState();
@@ -70,6 +78,9 @@ namespace NETCoreBot.Strategy
         public static int DANGER_THRESHOLD = 200;
         public static int MAX_PELLET_CANDIDATES = 6; // Number of pellets to consider for multi-pellet pathfinding
         public static int CORRIDOR_PENALTY = 30;
+        public const int STREAK_BREAK_PENALTY = 8; //Higher values will aggressively discourage paths that take too long to reach the next pellet.
+
+        public static int DFSDEPTH = 10;
 
         #endregion
 
@@ -79,7 +90,14 @@ namespace NETCoreBot.Strategy
         public const int STUCK_THRESHOLD = 3;
         public const int RECENT_POS_QUEUE_SIZE = 5;
         public const int REPLAN_INTERVAL = 3;
-        public const bool ENABLE_LOGGING = false;
+        public const bool ENABLE_LOGGING = true;
+
+        public const int POINTS_PER_PELLET = 1;
+
+        public const double SS_MultiplierGrowthFactor = 1.1;
+        public const int SS_Max= 4;
+        public const int SS_ResetGrace = 3;
+
 
         #endregion
 
@@ -94,6 +112,7 @@ namespace NETCoreBot.Strategy
             try
             {
                 SetGameStage();
+                ApplyParameters();
                 return CollectPellets(id);
             }
             finally
@@ -141,6 +160,27 @@ namespace NETCoreBot.Strategy
                 GAME_STAGE = GameStage.LateGame;
             }
         }
+
+        public static void ApplyParameters()
+        {
+            switch (GAME_STAGE)
+            {
+                case GameStage.EarlyGame:
+                    DFSDEPTH = 7;
+                    ALPHA = 1.7;
+                    break;
+                case GameStage.MidGame:
+                    ALPHA = 1.7;
+                    DFSDEPTH = 20;
+                    break;
+                case GameStage.LateGame:
+                    DFSDEPTH = 30;
+                    ALPHA = 1.7;
+                    break;
+                default:
+                    break;
+            }
+        }
         public static BotCommand? CollectPellets(Guid id)
         {
             // Update map dimensions
@@ -162,6 +202,7 @@ namespace NETCoreBot.Strategy
                 return null;
             }
 
+
             LogMessage($"Current Location: ({myAnimal.X}, {myAnimal.Y})", ConsoleColor.White);
 
             // <<=== NEW: Validate engine sync if a command was issued last tick ===>>
@@ -174,6 +215,10 @@ namespace NETCoreBot.Strategy
                     lastTickCommandIssued = GAME_STATE.Tick;
                     LastSentPosition = null;
                     LastMove = null;
+
+                    PersistentPath = null;
+                    PersistentTarget = null;
+                    PersistentPathScore = null;
 
                     return null;
                 }
@@ -248,16 +293,20 @@ namespace NETCoreBot.Strategy
             IsInDanger = false;
             Console.ForegroundColor = ConsoleColor.White;
 
+
+            //might still need this for bfs cluster ??
             var grid = GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content);
-            NarrowPelletAvoidanceSet = IdentifyNarrowAndLeadInPellets(grid);
-            ContestedPelletsThisTick = PredictContestedPellets(myAnimal);
+            if (GAME_STATE.Tick > 20)
+            {
+                NarrowPelletAvoidanceSet = IdentifyNarrowAndLeadInPellets(grid);
+                ContestedPelletsThisTick = PredictContestedPellets(myAnimal);
+            }
 
             var portalDecision = EvaluateAndRunThroughPortal(myAnimal);
             if (portalDecision != null)
             {
                 return portalDecision;
             }
-
 
             // Update visited counts
             var currentPos = (myAnimal.X, myAnimal.Y);
@@ -276,18 +325,18 @@ namespace NETCoreBot.Strategy
                     PersistentTarget = null;
                     stuckCounter = 0;
 
-                    var tieBreakTarget = FindNearestPelletTieBreak(myAnimal.X, myAnimal.Y, GAME_STATE.Cells, LastMove);
-                    if (tieBreakTarget != null)
-                    {
-                        LogMessage($"New target acquired (break out of loop fallback): ({tieBreakTarget.X}, {tieBreakTarget.Y})");
-                        PersistentTarget = tieBreakTarget;
-                        PersistentPath = null;
-                    }
-                    else
-                    {
-                        PersistentPath = null;
-                        PersistentTarget = null;
-                    }
+                    //var tieBreakTarget = FindNearestPelletTieBreak(myAnimal.X, myAnimal.Y, GAME_STATE.Cells, LastMove);
+                    //if (tieBreakTarget != null)
+                    //{
+                    //    LogMessage($"New target acquired (break out of loop fallback): ({tieBreakTarget.X}, {tieBreakTarget.Y})");
+                    //    PersistentTarget = tieBreakTarget;
+                    //    PersistentPath = null;
+                    //}
+                    //else
+                    //{
+                    //    PersistentPath = null;
+                    //    PersistentTarget = null;
+                    //}
 
                 }
             }
@@ -295,70 +344,35 @@ namespace NETCoreBot.Strategy
             {
                 stuckCounter = 0;
             }
+
             RecentPositions.Enqueue(currentPos);
             if (RecentPositions.Count > RECENT_POS_QUEUE_SIZE)
                 RecentPositions.Dequeue();
 
             // Periodic partial re-plan check
 
-            if (!IsPathStillValid(PersistentPath, myAnimal, GAME_STATE.Cells))
-            {
-                LogMessage("Periodic check: path invalid => clearing path & target.");
-                PersistentPath = null;
-                PersistentTarget = null;
+            //if (!IsPathStillValid(PersistentPath, myAnimal, GAME_STATE.Cells))
+            //{
+            //    LogMessage("Periodic check: path invalid => clearing path & target.");
+            //    PersistentPath = null;
+            //    PersistentTarget = null;
 
-            }
+            //}
 
-
-
-            if ((GAME_STATE.Tick % REPLAN_INTERVAL == 0) && !IGNORE_REPLAN)
-            {
-                if (PersistentPath != null && PersistentPath.Count > 2)
-                {
-                    var currentScore = EvaluatePathScore(PersistentPath);
-                    LogMessage($"[REPLAN CHECK] Current score: {currentScore:F2} | Original: {PersistentPathScore:F2}");
-
-
-                    if (PersistentPathScore.HasValue && currentScore < PersistentPathScore.Value)
-                    {
-                        LogMessage("Replanning due to score drop.");
-                        PersistentPath = null;
-                        PersistentTarget = null;
-                        PersistentPathScore = null;
-                    }
-                }
-                else
-                {
-                    PersistentPath = null;
-                    PersistentTarget = null;
-                    PersistentPathScore = null;
-                }
-            }
 
 
             // Fallback to your current target selection logic:
             CurrentTargetPellet = ValidateOrFindTarget(myAnimal);
-            PersistentTarget = CurrentTargetPellet;
+            //PersistentTarget = CurrentTargetPellet;
             if (CurrentTargetPellet == null)
             {
                 lastTickCommandIssued = GAME_STATE.Tick;
                 return null;
             }
 
-            // Compute or reuse path; note the additional parameters passed
-            var path = ValidateOrComputePath(myAnimal, CurrentTargetPellet, grid);
-            if (path == null || path.Count == 0)
-            {
-                LogMessage("No path found or path is empty. Skipping target.");
-                PersistentTarget = null;
-                PersistentPath = null;
-                CurrentTargetPellet = null;
-                lastTickCommandIssued = GAME_STATE.Tick;
-                return null;
-            }
 
             // Rate-limited move issuance
-            BotAction? action = ComputeNextMoveRateLimited(myAnimal, path);
+            BotAction? action = ComputeNextMoveRateLimited(myAnimal, PersistentPath);
             if (!action.HasValue)
             {
                 LogMessage("Rate-limited: Not issuing a new command this tick.");
@@ -369,16 +383,7 @@ namespace NETCoreBot.Strategy
 
             PersistentPath?.RemoveAt(0);
 
-            // If target reached, clear persistent state
-            if (myAnimal.X == CurrentTargetPellet.X && myAnimal.Y == CurrentTargetPellet.Y)
-            {
-                LogMessage("Target reached. Clearing persistent data.");
-                PersistentTarget = null;
-                PersistentPath = null;
-            }
-
-
-
+           
             // <<=== UPDATE: Before issuing the command, store current position and last move ===>>
             LogMessage($"Tick: {GAME_STATE.Tick} | Moving {action.Value} | Score {myAnimal.Score}");
             LastSentPosition = (myAnimal.X, myAnimal.Y); // Save starting position before the move is applied
@@ -458,26 +463,26 @@ namespace NETCoreBot.Strategy
             }
 
             // Compute the danger along the path.
-            int totalDanger = 0;
-            foreach (var node in path)
-            {
-                // Compute the zookeeper penalty at this node.
-                // (Assuming ComputeZookeeperPenalty is defined elsewhere and uses state.Zookeepers)
+            //int totalDanger = 0;
+            //foreach (var node in path)
+            //{
+            //    // Compute the zookeeper penalty at this node.
+            //    // (Assuming ComputeZookeeperPenalty is defined elsewhere and uses state.Zookeepers)
 
-                totalDanger += ComputeZookeeperPenalty(node.X, node.Y, myAnimal);
+            //    totalDanger += ComputeZookeeperPenalty(node.X, node.Y, myAnimal);
 
-                //if (GAME_STAGE == GameStage.MidGame)
-                ///{
-                   // Console.WriteLine($"Total danger is {totalDanger}");
-                //}
-                if (totalDanger > DANGER_THRESHOLD)
-                {
-                    // Path is too dangerous.
-                    LogMessage($"PATH INVALID: Path is too dangerous Total danger is {totalDanger} and danger threshold is {DANGER_THRESHOLD}");
-                    return false;
-                }
+            //    //if (GAME_STAGE == GameStage.MidGame)
+            //    ///{
+            //       // Console.WriteLine($"Total danger is {totalDanger}");
+            //    //}
+            //    if (totalDanger > DANGER_THRESHOLD)
+            //    {
+            //        // Path is too dangerous.
+            //        LogMessage($"PATH INVALID: Path is too dangerous Total danger is {totalDanger} and danger threshold is {DANGER_THRESHOLD}");
+            //        return false;
+            //    }
 
-            }
+            //}
 
             // Define a threshold for path danger (tune this value as needed).
 
@@ -485,11 +490,46 @@ namespace NETCoreBot.Strategy
 
             return true;
         }
-        public static double EvaluatePathScore(List<ElephantNode> path)
+        public static double EvaluatePathScoreWithStreak(List<ElephantNode> path, Animal myAnimal)
         {
+            if (path == null || path.Count == 0)
+                return 0;
+
             var grid = GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content);
-            int pellets = CountPelletsOnPath(path, grid);
-            return pellets;
+            int basePoints = POINTS_PER_PELLET;
+
+            float multiplier = myAnimal.CurrentMultiplier;
+            int ticksSinceLastPellet = myAnimal.TicksSinceLastScore;
+            double totalScore = 0;
+
+            if (path.Count < 2)
+                return 0;
+
+            for (int i = 1; i < path.Count; i++)
+            {                       
+                ticksSinceLastPellet++;
+
+                var node = path[i];
+
+                if (grid.TryGetValue((node.X, node.Y), out var content) && content == CellContent.Pellet)
+                {
+                    // Check if multiplier is preserved
+                    if (ticksSinceLastPellet <= SS_ResetGrace)
+                    {
+                        multiplier *= (float)SS_MultiplierGrowthFactor;
+                        multiplier = Math.Min(multiplier, SS_Max);
+                    }
+                    else
+                    {
+                        multiplier = 1.0f;
+                    }
+
+                    totalScore += (int)Math.Floor(basePoints * multiplier);
+                    ticksSinceLastPellet = 0;
+                }
+            }
+
+            return totalScore;
         }
 
         #endregion
@@ -578,7 +618,10 @@ namespace NETCoreBot.Strategy
                     nx, ny,
                     newG, newH,
                     current,
-                    ComputeTieBreaker(nx, ny)
+                    ComputeTieBreaker(nx, ny),
+                    0,
+                    0,
+                    0
                 );
             }
         }
@@ -1318,57 +1361,702 @@ namespace NETCoreBot.Strategy
         #endregion
 
         #region Target finding logic
-        public static Cell? ValidateOrFindTarget(Animal myAnimal)
+
+        public static bool ValidationCheck(Animal myAnimal)
         {
+            
             if (PersistentTarget != null)
             {
-                bool stillPellet = GAME_STATE.Cells.Any(c =>
-                    c.X == PersistentTarget.X &&
-                    c.Y == PersistentTarget.Y &&
-                    c.Content == CellContent.Pellet);
-                if (stillPellet)
+                if (myAnimal.X == PersistentTarget.X && myAnimal.Y == PersistentTarget.Y)
                 {
-                    LogMessage($"Using persistent target: ({PersistentTarget.X}, {PersistentTarget.Y})");
-                    return PersistentTarget;
+                    //LogMessage("[Validation Failed] Target reached. Clearing persistent data.", ConsoleColor.Blue);
+                    PersistentTarget = null;
+                    PersistentPath = null;
+                    PersistentPathScore = null;
+                    return false;
                 }
+
+
+                //Pellets on path 
+                var currentScore = EvaluatePathScore(PersistentPath);
+                if (PersistentPathScore.HasValue && currentScore < PersistentPathScore.Value)
+                {
+                    LogMessage($"[Validation Failed] Score Drop - Predicted Score {PersistentPathScore} | Current Score {currentScore}", ConsoleColor.Yellow);
+                    PersistentPath = null;
+                    PersistentTarget = null;
+                    PersistentPathScore = null;
+                    return false;
+                }
+
+                // Compute the danger along the path.
+                //int totalDanger = 0;
+                //foreach (var node in PersistentPath)
+                //{
+                //    totalDanger += ComputeZookeeperPenalty(node.X, node.Y, myAnimal);
+
+                //    //if (GAME_STAGE == GameStage.MidGame)
+                //    ///{
+                //       // Console.WriteLine($"Total danger is {totalDanger}");
+                //    //}
+                //    if (totalDanger > DANGER_THRESHOLD)
+                //    {
+                //        // Path is too dangerous.
+                //        LogMessage($"[Validation Failed]: Path is too dangerous Total danger is {totalDanger} and danger threshold is {DANGER_THRESHOLD}", ConsoleColor.Yellow);
+                //        PersistentPath = null;
+                //        PersistentTarget = null;
+                //        PersistentPathScore = null;
+                //        return false;
+                //    }
+
+                //}
+
             }
 
+            return true;
+        }
+        public static Cell? ValidateOrFindTarget(Animal myAnimal)
+        {
+            ValidationCheck(myAnimal);
 
-            if (GAME_STAGE == GameStage.LateGame)
+            if (PersistentTarget != null)
+            {
+                PersistentPathScore = EvaluatePathScore(PersistentPath) - 1; ;
+                LogMessage($"[Persistent target]  ({PersistentTarget.X}, {PersistentTarget.Y}) with a path of length {PersistentPath.Count} and score of {PersistentPathScore}");
+                LogCurrentPath(PersistentPath);
+                return PersistentTarget;
+            }
+
+            //REBUILD
+            //var (candidatePellet, candidatePath) = FindBestClusterMultiPelletPath(myAnimal);
+            //if (candidatePellet != null && candidatePath != null)
+            //{
+            //    LogMessage($"[New Target] Selected target: ({candidatePellet.X}, {candidatePellet.Y}) with a path of length {candidatePath.Count}");
+            //    PersistentTarget = candidatePellet;
+            //    PersistentPath = candidatePath;
+            //    PersistentPathScore = EvaluatePathScore(candidatePath);
+            //    LogMessage($"[New Target] ({candidatePellet.X}, {candidatePellet.Y}) with a path of length {candidatePath.Count} and score of {PersistentPathScore}");
+            //    LogCurrentPath(PersistentPath);
+            //    return candidatePellet;
+            //}
+
+            if (GAME_STAGE == GameStage.EarlyGame)
+            {
+                var (candidatePellet, candidatePath) = FindBestClusterMultiPelletPath(myAnimal);
+                if (candidatePellet != null && candidatePath != null)
+                {              
+                    PersistentTarget = candidatePellet;
+                    PersistentPath = candidatePath;
+                    PersistentPathScore = EvaluatePathScore(candidatePath);
+                    LogMessage($"[New Target] ({candidatePellet.X}, {candidatePellet.Y}) with a path of length {candidatePath.Count} and score of {PersistentPathScore}");
+                    LogCurrentPath(PersistentPath);
+                    return candidatePellet;
+                }
+            }
+            else if (GAME_STAGE == GameStage.MidGame)
+            {
+                var (targetPellet, pathToTarget) = FindBestClusterPath(myAnimal);
+                if (targetPellet != null && pathToTarget != null)
+                {
+                    //LogMessage($"[New path] Selected target: ({targetPellet.X}, {targetPellet.Y}) with a path of length {pathToTarget.Count}");
+                    PersistentTarget = targetPellet;
+                    PersistentPath = pathToTarget;
+                    PersistentPathScore = EvaluatePathScore(pathToTarget) - 1;
+                    LogMessage($"[New Target] ({targetPellet.X}, {targetPellet.Y}) with a path of length {pathToTarget.Count} and score of {PersistentPathScore}");
+                    LogCurrentPath(PersistentPath);
+                    return targetPellet;
+                }
+            }
+            else if (GAME_STAGE == GameStage.LateGame)
             {
                 var (candidatePellet, candidatePath) = FindBestClusterMultiPelletPathV2(myAnimal);
                 if (candidatePellet != null && candidatePath != null)
                 {
-                    LogMessage($"[ClusterMultiPellet] Selected target: ({candidatePellet.X}, {candidatePellet.Y}) with a path of length {candidatePath.Count}");
-                    PersistentTarget = candidatePellet;
-                    PersistentPath = candidatePath;
-                    PersistentPathScore = EvaluatePathScore(candidatePath);
-                    return candidatePellet;
-                }
-            }
-            else
-            {
-                var (candidatePellet, candidatePath) = FindBestClusterMultiPelletPath(myAnimal);
-                if (candidatePellet != null && candidatePath != null)
-                {
-                    LogMessage($"[ClusterMultiPellet] Selected target: ({candidatePellet.X}, {candidatePellet.Y}) with a path of length {candidatePath.Count}");
-                    PersistentTarget = candidatePellet;
-                    PersistentPath = candidatePath;
-                    PersistentPathScore = EvaluatePathScore(candidatePath);
-                    return candidatePellet;
-                }
-            }
 
+                    PersistentTarget = candidatePellet;
+                    PersistentPath = candidatePath;
+                    PersistentPathScore = EvaluatePathScore(candidatePath);
+                    LogMessage($"[New Target] ({candidatePellet.X}, {candidatePellet.Y}) with a path of length {candidatePath.Count} and score of {PersistentPathScore}");
+                    return candidatePellet;
+                }
+            }
 
             var tieBreakTarget = FindNearestPelletTieBreak(myAnimal.X, myAnimal.Y, GAME_STATE.Cells, LastMove);
             if (tieBreakTarget != null)
             {
-                LogMessage($"New target acquired (tie-break fallback): ({tieBreakTarget.X}, {tieBreakTarget.Y})");
+                LogMessage($"New target acquired (tie-break fallback): ({tieBreakTarget.X}, {tieBreakTarget.Y})");   
+                
+                var grid = GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content);
+                var path = FindPath(myAnimal.X, myAnimal.Y, PersistentTarget.X, PersistentTarget.Y, grid, myAnimal);
+
                 PersistentTarget = tieBreakTarget;
-                PersistentPath = null;
+                PersistentPath = path;
+                PersistentPathScore = EvaluatePathScore(path) - 1 ;
+
+                LogCurrentPath(PersistentPath);
+
             }
             return tieBreakTarget;
         }
+        public static (Cell? bestPellet, List<ElephantNode>? bestPath) FindBestClusterPath(Animal myAnimal)
+        {
+            // Build a grid for cell lookup.
+            var grid = GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content);
+
+            (ElephantNode? closestPellet, List<ElephantNode>? bestCluster) bestCluster = FindBestCluster(myAnimal, GAME_STATE.Cells,grid);
+
+            if (bestCluster.closestPellet == null)
+            {
+                // No pellets found in the cluster.
+                return (null, null);
+            }
+
+
+            var path = FindPath(myAnimal.X, myAnimal.Y, bestCluster.closestPellet.X, bestCluster.closestPellet.Y, grid, myAnimal);
+            if (path == null || path.Count == 0)
+            {
+                return (null, null);
+            }
+
+            var extendedClusterPath = bestCluster.bestCluster;
+
+            // Remove first node if it overlaps with path end
+            //if (extendedClusterPath.Count > 0 && path.Last().X == extendedClusterPath[0].X && path.Last().Y == extendedClusterPath[0].Y)
+            //    extendedClusterPath.RemoveAt(0);
+
+            var clusterSet = bestCluster.bestCluster.Select(c => (c.X, c.Y)).ToHashSet();
+            var longestPath = FindLongestPelletPathInCluster((bestCluster.closestPellet.X, bestCluster.closestPellet.Y), clusterSet);
+
+            var fullPath = new List<ElephantNode>();
+            fullPath.AddRange(path);
+
+            
+
+            if (longestPath != null && longestPath.Count > 0)
+            {
+
+                if (longestPath.Count > 0 && path.Last().X == longestPath[0].X && path.Last().Y == longestPath[0].Y)
+                {
+                    longestPath.RemoveAt(0);
+                }
+
+                fullPath.AddRange(longestPath);
+            }
+
+            ElephantNode finalPellet = fullPath.Last();
+
+            var newTarget = new Cell { X = finalPellet.X, Y = finalPellet.Y, Content = CellContent.Pellet };
+            return (newTarget, fullPath);
+        }
+        public static (ElephantNode? closestPellet, List<ElephantNode>? bestCluster) FindBestCluster(Animal myAnimal, List<Cell> allCells, Dictionary<(int, int), CellContent> grid)
+        {
+            var pelletCells = allCells.Where(c => c.Content == CellContent.Pellet).OrderBy(x=> Manhattan(myAnimal.X,myAnimal.Y,x.X,x.Y)).ToList();
+
+            if (pelletCells.Count == 0)
+                return (null, null);
+
+
+            var visited = new HashSet<(int, int)>();
+            var clusters = new List<List<ElephantNode>>();
+
+            foreach (var pcell in pelletCells)
+            {
+                var pos = (pcell.X, pcell.Y);
+                if (!visited.Contains(pos))
+                {
+                    var cluster = BFSClusterPath(pos, grid, visited);
+                    clusters.Add(cluster);
+                }
+            }
+
+            double bestScore = double.NegativeInfinity;
+            List<ElephantNode>? bestCluster = null;
+            ElephantNode? bestPellet = null;
+
+            foreach (var cluster in clusters)
+            {
+                if (cluster.Count == 0) continue;
+
+                int clusterSize = cluster.Count;
+
+                ElephantNode closePellet = cluster.OrderBy(p => Manhattan(myAnimal.X, myAnimal.Y, p.X, p.Y)).First();
+                int dist = Manhattan(myAnimal.X, myAnimal.Y, closePellet.X, closePellet.Y);
+
+
+                double score = clusterSize - ALPHA * dist;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestCluster = cluster;
+                    bestPellet = closePellet;
+                }
+            }
+            if (bestCluster == null || bestCluster.Count == 0)
+                return (null, null);
+
+            return (bestPellet, bestCluster);
+
+        }
+        public static List<ElephantNode> BFSClusterPath((int x, int y) start, Dictionary<(int, int), CellContent> grid, HashSet<(int, int)> visited)
+        {
+            var path = new List<ElephantNode>();
+            var queue = new Queue<(int x, int y, ElephantNode? parent)>();
+            queue.Enqueue((start.x, start.y, null));
+            visited.Add(start);
+
+            while (queue.Count > 0)
+            {
+                var (x, y, parent) = queue.Dequeue();
+
+                var node = new ElephantNode(x, y, 0, 0, parent, 0, 1.0f, 0, 0); // G, H, etc. not needed here
+                path.Add(node);
+
+                int[,] dirs = new int[,] { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } };
+                for (int i = 0; i < 4; i++)
+                {
+                    int nx = x + dirs[i, 0];
+                    int ny = y + dirs[i, 1];
+                    var npos = (nx, ny);
+
+                    if (!visited.Contains(npos) && grid.TryGetValue(npos, out var content) && content == CellContent.Pellet && !ContestedPelletsThisTick.Contains(npos) && !NarrowPelletAvoidanceSet.Contains(npos))
+                    {
+                        visited.Add(npos);
+                        queue.Enqueue((nx, ny, node));
+                    }
+                }
+            }
+
+            return path;
+        }
+        public static List<ElephantNode>? FindPathClean(int startX, int startY, int targetX, int targetY, Dictionary<(int, int), CellContent> grid, Animal myAnimal)
+        {
+            var openSet = new List<ElephantNode>();
+            var closedSet = new HashSet<(int, int)>();
+
+            var startNode = new ElephantNode(
+                startX, startY,
+                0,
+                Manhattan(startX, startY, targetX, targetY),
+                null,
+                ComputeTieBreaker(startX, startY),
+                myAnimal.CurrentMultiplier,
+                0.0,
+                myAnimal.TicksSinceLastScore
+            );
+            openSet.Add(startNode);
+
+            while (openSet.Count > 0)
+            {
+                openSet.Sort((a, b) =>
+                {
+                    // Lower G - SimScore wins (i.e., cheaper movement with more score)
+                    double aF = a.G - a.SimulatedScore;
+                    double bF = b.G - b.SimulatedScore;
+
+                    int cmp = aF.CompareTo(bF);
+                    if (cmp == 0)
+                    {
+                        cmp = a.H.CompareTo(b.H);
+                        if (cmp == 0)
+                        {
+                            cmp = a.TieBreak.CompareTo(b.TieBreak);
+                        }
+                    }
+                    return cmp;
+                });
+
+
+                var current = openSet[0];
+                openSet.RemoveAt(0);
+
+                if (current.X == targetX && current.Y == targetY)
+                    return ReconstructPath(current);
+
+                closedSet.Add((current.X, current.Y));
+
+                foreach (var neighbor in GetNeighborsClean(current, grid, targetX, targetY, myAnimal))
+                {
+                    if (closedSet.Contains((neighbor.X, neighbor.Y)))
+                        continue;
+
+                    var existing = openSet.FirstOrDefault(n => n.X == neighbor.X && n.Y == neighbor.Y);
+                    if (existing != null && existing.G <= neighbor.G)
+                        continue;
+
+                    openSet.Add(neighbor);
+                }
+            }
+            return null;
+        }
+        public static IEnumerable<ElephantNode> GetNeighborsClean(ElephantNode current, Dictionary<(int, int), CellContent> grid, int targetX, int targetY, Animal myAnimal)
+        {
+            int[,] directions = new int[,] { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } };
+
+            for (int i = 0; i < directions.GetLength(0); i++)
+            {
+                int nx = current.X + directions[i, 0];
+                int ny = current.Y + directions[i, 1];
+
+                // Wrap horizontally
+                if (nx < 0)
+                {
+                    if (PortalLeft) nx = MapWidth - 1;
+                    else continue;
+                }
+                else if (nx >= MapWidth)
+                {
+                    if (PortalRight) nx = 0;
+                    else continue;
+                }
+
+                // Wrap vertically
+                if (ny < 0)
+                {
+                    if (PortalUp) ny = MapHeight - 1;
+                    else continue;
+                }
+                else if (ny >= MapHeight)
+                {
+                    if (PortalDown) ny = 0;
+                    else continue;
+                }
+                //}
+
+                if (!grid.TryGetValue((nx, ny), out var content))
+                    continue;
+                if (content == CellContent.Wall ||
+                    content == CellContent.AnimalSpawn ||
+                    content == CellContent.ZookeeperSpawn)
+                    continue;
+
+                int pelletBonus = (content == CellContent.Pellet) ? PELLET_BONUS : 0;
+
+                int newG = current.G + 1 - pelletBonus;
+
+                int newH = Manhattan(nx, ny, targetX, targetY);
+
+                float newMultiplier = current.SimulatedMultiplier;
+                double newSimScore = current.SimulatedScore;
+                int newTicksSinceLastScore = current.TicksSinceLastScore + 1;
+
+                // Pellet? simulate multiplier gain
+                if (content == CellContent.Pellet)
+                {
+                    if (newTicksSinceLastScore <= SS_ResetGrace)
+                    {
+                        newMultiplier *= (float)SS_MultiplierGrowthFactor;
+                        newMultiplier = Math.Min(newMultiplier, SS_Max);
+                    }
+                    else
+                    {
+                        newMultiplier = 1.0f;
+                    }
+
+                    newSimScore += POINTS_PER_PELLET * newMultiplier;
+                    newTicksSinceLastScore = 0;
+                }
+
+
+                yield return new ElephantNode(
+                    nx, ny,
+                    newG, newH,
+                    current,
+                    ComputeTieBreaker(nx, ny),
+                    newMultiplier,
+                    newSimScore,
+                    newTicksSinceLastScore
+                );
+            }
+        }
+        public static List<ElephantNode> FindLongestPelletPathInCluster((int x, int y) start,HashSet<(int, int)> clusterSet) // ✅ Tune this externally
+        {
+            var bestPath = new List<ElephantNode>();
+            var visited = new HashSet<(int, int)>();
+
+            void DFS((int x, int y) current, List<ElephantNode> currentPath)
+            {
+                visited.Add(current);
+                currentPath.Add(new ElephantNode(current.x, current.y, 0, 0, null, 0, 1.0f, 0, 0));
+
+                // ✅ Always track the longest path seen so far
+                if (currentPath.Count > bestPath.Count)
+                    bestPath = new List<ElephantNode>(currentPath);
+
+                // ✅ Early return if max depth reached — no deeper search
+                if (currentPath.Count >= DFSDEPTH)
+                {
+                    visited.Remove(current);
+                    currentPath.RemoveAt(currentPath.Count - 1);
+                    return;
+                }
+
+                var neighbors = new (int x, int y)[]
+                {
+                    (current.x, current.y - 1),
+                    (current.x, current.y + 1),
+                    (current.x - 1, current.y),
+                    (current.x + 1, current.y),
+                };
+
+                foreach (var neighbor in neighbors)
+                {
+                    if (clusterSet.Contains(neighbor) && !visited.Contains(neighbor))
+                    {
+                        DFS(neighbor, currentPath);
+                    }
+                }
+
+                // ✅ Backtrack
+                visited.Remove(current);
+                currentPath.RemoveAt(currentPath.Count - 1);
+            }
+
+            DFS(start, new List<ElephantNode>());
+
+            return bestPath;
+        }
+
+        public static (Cell? bestPellet, List<ElephantNode>? bestPath) FindBestEarlyGamePelletBurstPath(
+            int startX,
+            int startY,
+            Dictionary<(int, int), CellContent> grid,
+            int maxSteps,
+            int resetGrace)
+        {
+            var bestPath = new List<ElephantNode>();
+
+            void DFS(int x, int y, int stepsRemaining, int emptySinceLastPellet,
+                     HashSet<(int, int)> visited, List<ElephantNode> currentPath, int pelletCount)
+            {
+                if (stepsRemaining < 0 || emptySinceLastPellet > resetGrace)
+                    return;
+
+                var node = new ElephantNode(x, y, 0, 0, null, 0, 1.0f, 0, 0);
+                currentPath.Add(node);
+                visited.Add((x, y));
+
+                var content = grid.TryGetValue((x, y), out var c) ? c : CellContent.Empty;
+                bool isPellet = content == CellContent.Pellet;
+
+                if (isPellet && pelletCount + 1 > bestPath.Count)
+                    bestPath = new List<ElephantNode>(currentPath);
+
+                var neighbors = new (int x, int y)[]
+                {
+            (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)
+                };
+
+                foreach (var n in neighbors)
+                {
+                    if (!visited.Contains(n) &&
+                        grid.TryGetValue(n, out var nc) &&
+                        nc != CellContent.Wall &&
+                        nc != CellContent.ZookeeperSpawn &&
+                        nc != CellContent.AnimalSpawn)
+                    {
+                        DFS(n.x, n.y,
+                            stepsRemaining - 1,
+                            isPellet ? 0 : emptySinceLastPellet + 1,
+                            visited,
+                            currentPath,
+                            isPellet ? pelletCount + 1 : pelletCount);
+                    }
+                }
+
+                visited.Remove((x, y));
+                currentPath.RemoveAt(currentPath.Count - 1);
+            }
+
+            DFS(startX, startY, maxSteps, 0, new HashSet<(int, int)>(), new List<ElephantNode>(), 0);
+
+            if (bestPath.Count <1)
+            {
+                return (null, null);
+            }
+            var last = bestPath.Last();
+
+            return (new Cell() { X = last.X, Y = last.Y}, bestPath);
+        }
+
+
+        public static List<Cell> BFSCluster((int x, int y) start, Dictionary<(int, int), CellContent> grid, HashSet<(int, int)> visited)
+        {
+            var cluster = new List<Cell>();
+            var queue = new Queue<(int x, int y)>();
+            queue.Enqueue(start);
+            visited.Add(start);
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                cluster.Add(new Cell { X = current.x, Y = current.y, Content = CellContent.Pellet });
+                int[,] dirs = new int[,] { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } };
+                for (int i = 0; i < dirs.GetLength(0); i++)
+                {
+                    int nx = current.x + dirs[i, 0];
+                    int ny = current.y + dirs[i, 1];
+                    var npos = (nx, ny);
+                    if (!visited.Contains(npos) && grid.TryGetValue(npos, out var content))
+                    {
+                        if (content == CellContent.Pellet)
+                        {
+                            visited.Add(npos);
+                            queue.Enqueue(npos);
+                        }
+                    }
+                }
+            }
+            return cluster;
+        }
+        
+
+
+
+
+
+
+        public static List<ElephantNode> GetOneWayGreedyPelletPath(
+            (int x, int y) start,
+            HashSet<(int, int)> clusterSet)
+        {
+            var path = new List<ElephantNode>();
+            var visited = new HashSet<(int, int)>();
+            var current = start;
+
+            while (true)
+            {
+                path.Add(new ElephantNode(current.Item1, current.Item2, 0, 0, null, 0, 1.0f, 0, 0));
+                visited.Add(current);
+
+                // Get unvisited adjacent pellets
+                var neighbors = new (int x, int y)[]
+                {
+            (current.Item1, current.Item2 - 1),
+            (current.Item1, current.Item2 + 1),
+            (current.Item1 - 1, current.Item2),
+            (current.Item1 + 1, current.Item2),
+                };
+
+                // Prefer nearest unvisited pellet
+                var next = neighbors.FirstOrDefault(n => clusterSet.Contains(n) && !visited.Contains(n));
+
+                if (next == default)
+                    break;
+
+                current = next;
+            }
+
+            return path;
+        }
+
+
+
+        public static List<ElephantNode> BuildGreedyClusterPath(
+            (int x, int y) start,
+            List<ElephantNode> cluster,
+            Dictionary<(int, int), CellContent> grid,
+            Animal myAnimal)
+        {
+            var path = new List<ElephantNode>();
+            var remaining = new HashSet<(int, int)>(cluster.Select(c => (c.X, c.Y)));
+            var currentX = start.x;
+            var currentY = start.y;
+
+            while (remaining.Count > 0)
+            {
+                // Find nearest remaining pellet
+                var next = remaining
+                    .OrderBy(p => Manhattan(currentX, currentY, p.Item1, p.Item2))
+                    .First();
+
+                // Build straight-line path from current to next using your A*
+                var partial = FindPath(currentX, currentY, next.Item1, next.Item2, grid, myAnimal);
+                if (partial == null || partial.Count == 0)
+                    break;
+
+                // Remove duplicate overlap
+                if (path.Count > 0 && partial[0].X == path.Last().X && partial[0].Y == path.Last().Y)
+                    partial.RemoveAt(0);
+
+                path.AddRange(partial);
+
+                // Move forward
+                currentX = next.Item1;
+                currentY = next.Item2;
+                remaining.Remove(next);
+            }
+
+            return path;
+        }
+
+        public static List<ElephantNode> PathThroughCluster(Cell start, List<Cell> cluster, Dictionary<(int, int), CellContent> grid, Animal myAnimal)
+        {
+            var remaining = new HashSet<(int, int)>(cluster.Select(c => (c.X, c.Y)));
+            remaining.Remove((start.X, start.Y));
+
+            var fullPath = new List<ElephantNode>();
+            var currentX = start.X;
+            var currentY = start.Y;
+
+            while (remaining.Count > 0)
+            {
+                // Find nearest remaining pellet
+                var next = remaining
+                    .OrderBy(p => Manhattan(currentX, currentY, p.Item1, p.Item2))
+                    .First();
+
+                var partialPath = FindPath(currentX, currentY, next.Item1, next.Item2, grid, myAnimal);
+                if (partialPath == null || partialPath.Count == 0)
+                    break;
+
+                // Remove duplicate node if it overlaps
+                if (fullPath.Count > 0 && partialPath[0].X == fullPath.Last().X && partialPath[0].Y == fullPath.Last().Y)
+                    partialPath.RemoveAt(0);
+
+                fullPath.AddRange(partialPath);
+                currentX = next.Item1;
+                currentY = next.Item2;
+                remaining.Remove(next);
+            }
+
+            return fullPath;
+        }
+        public static List<ElephantNode> WalkClusterPath(Cell start, List<Cell> cluster)
+        {
+            var path = new List<ElephantNode>();
+            var clusterSet = new HashSet<(int, int)>(cluster.Select(c => (c.X, c.Y)));
+            var visited = new HashSet<(int, int)>();
+            var queue = new Queue<(int x, int y, ElephantNode? parent)>();
+            var nodeMap = new Dictionary<(int, int), ElephantNode>();
+
+            queue.Enqueue((start.X, start.Y, null));
+
+            while (queue.Count > 0)
+            {
+                var (x, y, parent) = queue.Dequeue();
+                if (visited.Contains((x, y))) continue;
+
+                var node = new ElephantNode(x, y, 0, 0, parent, 0, 1.0f, 0, 0); // dummy node, won't be used in A*
+                nodeMap[(x, y)] = node;
+                visited.Add((x, y));
+                path.Add(node);
+
+                int[,] dirs = new int[,] { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } };
+                for (int i = 0; i < 4; i++)
+                {
+                    int nx = x + dirs[i, 0];
+                    int ny = y + dirs[i, 1];
+                    if (clusterSet.Contains((nx, ny)) && !visited.Contains((nx, ny)))
+                    {
+                        queue.Enqueue((nx, ny, node));
+                    }
+                }
+            }
+
+            return path;
+        }
+
+
+
+
         public static (Cell? bestPellet, List<ElephantNode>? bestPath) FindBestClusterMultiPelletPath(Animal myAnimal)
         {
             // Build a grid for cell lookup.
@@ -1428,49 +2116,59 @@ namespace NETCoreBot.Strategy
             return (bestPellet, bestPath);
 
         }
-        public static Cell? FindPelletInLargestConnectedClusterWeighted_Old_School(Animal myAnimal, List<Cell> allCells, double alpha)
+        public static (Cell? bestPellet, List<ElephantNode>? bestPath) FindBestClusterMultiPelletPathSS(Animal myAnimal)
         {
-            var pelletCells = allCells.Where(c => c.Content == CellContent.Pellet).ToList();
-            if (pelletCells.Count == 0)
-                return null;
-            var grid = allCells.ToDictionary(c => (c.X, c.Y), c => c.Content);
-            var visited = new HashSet<(int, int)>();
-            var clusters = new List<List<Cell>>();
-            foreach (var pcell in pelletCells)
+            // Build a grid for cell lookup.
+            var grid = GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content);
+
+            // 1. Identify a candidate pellet from the largest cluster.
+            //    (This uses your existing FindPelletInLargestConnectedClusterWeighted.)
+            var clusterCandidate = FindPelletInLargestConnectedClusterWeighted(myAnimal, GAME_STATE.Cells, ALPHA);
+            if (clusterCandidate == null)
             {
-                var pos = (pcell.X, pcell.Y);
-                if (!visited.Contains(pos))
-                {
-                    var cluster = BFSCluster(pos, grid, visited);
-                    clusters.Add(cluster);
-                }
+                // If no cluster candidate is found, fall back to the multi-pellet method over all pellets.
+                return FindBestMultiPelletPath(myAnimal, grid);
             }
+
+            // 2. Obtain the full cluster containing the candidate pellet.
+            var visited = new HashSet<(int, int)>();
+            List<Cell> bestCluster = BFSCluster((clusterCandidate.X, clusterCandidate.Y), grid, visited);
+
+            // 3. Filter candidate pellets to those in the identified cluster.
+            var clusterPellets = bestCluster
+                .OrderBy(p => Manhattan(myAnimal.X, myAnimal.Y, p.X, p.Y))
+                .Take(MAX_PELLET_CANDIDATES)
+                .ToList();
+
+
+
+            // 4. For each pellet in the cluster, compute a path and score it.
+            //if (GAME_STAGE == GameStage.EarlyGame)
+            //{
+            Cell? bestPellet = null;
+            List<ElephantNode>? bestPath = null;
             double bestScore = double.NegativeInfinity;
-            List<Cell>? bestCluster = null;
-            foreach (var cluster in clusters)
+
+            foreach (var pellet in clusterPellets)
             {
-                if (cluster.Count == 0) continue;
-                int sumX = 0, sumY = 0;
-                foreach (var c in cluster)
-                {
-                    sumX += c.X;
-                    sumY += c.Y;
-                }
-                int clusterSize = cluster.Count;
-                int avgX = sumX / clusterSize;
-                int avgY = sumY / clusterSize;
-                int dist = Math.Abs(myAnimal.X - avgX) + Math.Abs(myAnimal.Y - avgY);
-                double score = clusterSize - alpha * dist;
+                // Run your existing A* search (FindPath) to get a path from your current location to the pellet.
+                var path = FindPath(myAnimal.X, myAnimal.Y, pellet.X, pellet.Y, grid, myAnimal);
+                if (path == null || path.Count == 0)
+                    continue;
+
+                double score = SimulateStreakScore(path, grid, myAnimal);
+
+                // 5. If this candidate's score is the best so far, keep it.
                 if (score > bestScore)
                 {
                     bestScore = score;
-                    bestCluster = cluster;
+                    bestPellet = pellet;
+                    bestPath = path;
                 }
             }
-            if (bestCluster == null || bestCluster.Count == 0)
-                return null;
-            var bestPellet = bestCluster.OrderBy(p => Manhattan(myAnimal.X, myAnimal.Y, p.X, p.Y)).First();
-            return bestPellet;
+
+            return (bestPellet, bestPath);
+
         }
         public static Cell? FindPelletInLargestConnectedClusterWeighted(Animal myAnimal, List<Cell> allCells, double alpha)
         {
@@ -1516,34 +2214,7 @@ namespace NETCoreBot.Strategy
             var bestPellet = bestCluster.OrderBy(p => Manhattan(myAnimal.X, myAnimal.Y, p.X, p.Y)).First();
             return bestPellet;
         }
-        public static List<Cell> BFSCluster((int x, int y) start, Dictionary<(int, int), CellContent> grid, HashSet<(int, int)> visited)
-        {
-            var cluster = new List<Cell>();
-            var queue = new Queue<(int x, int y)>();
-            queue.Enqueue(start);
-            visited.Add(start);
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                cluster.Add(new Cell { X = current.x, Y = current.y, Content = CellContent.Pellet });
-                int[,] dirs = new int[,] { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } };
-                for (int i = 0; i < dirs.GetLength(0); i++)
-                {
-                    int nx = current.x + dirs[i, 0];
-                    int ny = current.y + dirs[i, 1];
-                    var npos = (nx, ny);
-                    if (!visited.Contains(npos) && grid.TryGetValue(npos, out var content))
-                    {
-                        if (content == CellContent.Pellet)
-                        {
-                            visited.Add(npos);
-                            queue.Enqueue(npos);
-                        }
-                    }
-                }
-            }
-            return cluster;
-        }
+        
 
         public static (Cell? bestPellet, List<ElephantNode>? bestPath) FindBestClusterMultiPelletPathV2(Animal myAnimal)
         {
@@ -1596,12 +2267,7 @@ namespace NETCoreBot.Strategy
                 if (path == null || path.Count == 0)
                     continue;
 
-                // Count how many pellets the path passes through.
-                int pelletCountOnPath = CountPelletsOnPath(path, grid);
-
-                int pathLength = path.Count;
-                // Compute the score: reward higher pellet count and penalize longer paths.
-                double score = pelletCountOnPath - (ALPHA * pathLength);
+                double score = SimulateStreakScore(path, grid, myAnimal);
 
                 // 5. If this candidate's score is the best so far, keep it.
                 if (score > bestScore)
@@ -1633,9 +2299,6 @@ namespace NETCoreBot.Strategy
                     clusters.Add(cluster);
                 }
             }
-
-
-
 
 
             double bestScore = double.NegativeInfinity;
@@ -1784,25 +2447,91 @@ namespace NETCoreBot.Strategy
 
         public static Cell? FindNearestPelletTieBreak(int startX, int startY, List<Cell> cells, BotAction? lastMove)
         {
-            int bestDistance = int.MaxValue;
-            var pellets = new List<Cell>();
+
+            int graceLimit = SS_ResetGrace;
+
+            var pelletScores = new List<(Cell cell, int distance, bool aligned, bool withinGrace)>();
+
             foreach (var c in cells)
             {
-                if (c.Content == CellContent.Pellet)
-                {
-                    int dist = Math.Abs(startX - c.X) + Math.Abs(startY - c.Y);
-                    if (dist < bestDistance)
-                        bestDistance = dist;
-                    pellets.Add(c);
-                }
+                if (c.Content != CellContent.Pellet)
+                    continue;
+
+                int dist = Math.Abs(startX - c.X) + Math.Abs(startY - c.Y);
+                bool aligned = IsAligned(lastMove, startX, startY, c);
+                bool withinGrace = dist <= graceLimit;
+
+                pelletScores.Add((c, dist, aligned, withinGrace));
             }
-            if (pellets.Count == 0) return null;
-            var closest = pellets.Where(p => Math.Abs(startX - p.X) + Math.Abs(startY - p.Y) == bestDistance).ToList();
-            if (closest.Count == 0) return null;
-            var aligned = closest.Where(p => IsAligned(lastMove, startX, startY, p)).ToList();
-            return aligned.Count > 0 ? aligned[0] : closest[0];
+
+            if (pelletScores.Count == 0)
+                return null;
+
+            // 1. First, try to get the best within grace
+            var withinGraceCandidates = pelletScores
+                .Where(p => p.withinGrace)
+                .OrderBy(p => p.distance)
+                .ThenByDescending(p => p.aligned) // Prefer aligned if same distance
+                .Select(p => p.cell)
+                .ToList();
+
+            if (withinGraceCandidates.Any())
+                return withinGraceCandidates.First();
+
+            // 2. Else fallback to nearest overall, with aligned tie-break
+            var fallbackCandidates = pelletScores
+                .OrderBy(p => p.distance)
+                .ThenByDescending(p => p.aligned)
+                .Select(p => p.cell)
+                .ToList();
+
+            return fallbackCandidates.First();
         }
 
+
+        public static double SimulateStreakScore(List<ElephantNode> path, Dictionary<(int, int), CellContent> grid, Animal myAnimal)
+        {
+            double score = 0;
+            float multiplier = myAnimal.CurrentMultiplier;
+            int ticksSinceLastScore = myAnimal.TicksSinceLastScore;
+
+            for (int i = 0; i < path.Count; i++)
+            {
+                var node = path[i];
+                if (grid.TryGetValue((node.X, node.Y), out var content) && content == CellContent.Pellet)
+                {
+                    // Will we keep the streak alive?
+                    if (ticksSinceLastScore <= SS_ResetGrace)
+                    {
+                        multiplier *= (float)SS_MultiplierGrowthFactor;
+                        multiplier = Math.Min(multiplier, SS_Max);
+                    }
+                    else
+                    {
+                        multiplier = 1.0f;
+                    }
+
+                    // Apply score
+                    score += POINTS_PER_PELLET * multiplier;
+
+                    // Reset streak counter
+                    ticksSinceLastScore = 0;
+                }
+                else
+                {
+                    ticksSinceLastScore++;
+                }
+            }
+
+            return score;
+        }
+
+        public static double EvaluatePathScore(List<ElephantNode> path)
+        {
+            var grid = GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content);
+            int pellets = CountPelletsOnPath(path, grid);
+            return pellets;
+        }
 
         #endregion
 
@@ -1812,39 +2541,29 @@ namespace NETCoreBot.Strategy
             if (PersistentPath != null && PersistentPath.Count > 0)
             {
                 LogMessage("Using persistent path.");
-                PersistentPathScore = EvaluatePathScore(PersistentPath);
+                PersistentPathScore = EvaluatePathScoreWithStreak(PersistentPath,myAnimal);
 
                 LogCurrentPath(PersistentPath);
                 return PersistentPath;
             }
+
             var path = FindPath(myAnimal.X, myAnimal.Y, target.X, target.Y, grid, myAnimal);
             PersistentPath = path;
-            PersistentPathScore = EvaluatePathScore(path);
+            PersistentPathScore = EvaluatePathScoreWithStreak(path,myAnimal);
 
             if (path != null && path.Count > 0)
             {
                 LogMessage("Computed new path.");
                 LogCurrentPath(PersistentPath);
+
+                var lastNode = path.Last();
+                LogMessage($"[PATH INFO] SimScore={lastNode.SimulatedScore:F2} | FinalMult={lastNode.SimulatedMultiplier:F2} | PathLength={path.Count}", ConsoleColor.Magenta);
+
             }
             return path;
         }
-        public static List<ElephantNode>? FindPath(
-            int startX,
-            int startY,
-            int targetX,
-            int targetY,
-            Dictionary<(int, int), CellContent> grid,
-            Animal myAnimal)
+        public static List<ElephantNode>? FindPath(int startX,int startY,int targetX,int targetY,Dictionary<(int, int), CellContent> grid,Animal myAnimal)
         {
-
-
-            //if (GAME_STAGE == GameStage.MidGame || GAME_STAGE == GameStage.LateGame)
-            //{
-            //NarrowPelletAvoidanceSet = IdentifyNarrowAndLeadInPellets(grid);
-            //ContestedPelletsThisTick = PredictContestedPellets(myAnimal);
-            //}
-
-
             var openSet = new List<ElephantNode>();
             var closedSet = new HashSet<(int, int)>();
 
@@ -1853,7 +2572,10 @@ namespace NETCoreBot.Strategy
                 0,
                 Manhattan(startX, startY, targetX, targetY),
                 null,
-                ComputeTieBreaker(startX, startY)
+                ComputeTieBreaker(startX, startY),
+                myAnimal.CurrentMultiplier,
+                0.0,
+                myAnimal.TicksSinceLastScore
             );
             openSet.Add(startNode);
 
@@ -1861,7 +2583,11 @@ namespace NETCoreBot.Strategy
             {
                 openSet.Sort((a, b) =>
                 {
-                    int cmp = a.F.CompareTo(b.F);
+                    // Lower G - SimScore wins (i.e., cheaper movement with more score)
+                    double aF = a.G - a.SimulatedScore;
+                    double bF = b.G - b.SimulatedScore;
+
+                    int cmp = aF.CompareTo(bF);
                     if (cmp == 0)
                     {
                         cmp = a.H.CompareTo(b.H);
@@ -1872,6 +2598,7 @@ namespace NETCoreBot.Strategy
                     }
                     return cmp;
                 });
+
 
                 var current = openSet[0];
                 openSet.RemoveAt(0);
@@ -1896,12 +2623,7 @@ namespace NETCoreBot.Strategy
             return null;
         }
 
-        public static IEnumerable<ElephantNode> GetNeighborsPortal(
-            ElephantNode current,
-            Dictionary<(int, int), CellContent> grid,
-            int targetX,
-            int targetY,
-            Animal myAnimal)
+        public static IEnumerable<ElephantNode> GetNeighborsPortal(ElephantNode current,Dictionary<(int, int), CellContent> grid,int targetX,int targetY,Animal myAnimal)
         {
             int[,] directions = new int[,] { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } };
 
@@ -1911,8 +2633,6 @@ namespace NETCoreBot.Strategy
                 int ny = current.Y + directions[i, 1];
 
                 // Wrap horizontally
-                //if (GAME_STAGE == GameStage.MidGame || GAME_STAGE == GameStage.LateGame)
-                //{
                 if (nx < 0)
                 {
                     if (PortalLeft) nx = MapWidth - 1;
@@ -1969,18 +2689,52 @@ namespace NETCoreBot.Strategy
 
 
                 int pelletBonus = (content == CellContent.Pellet) ? PELLET_BONUS : 0;
+
+                // Predict streak continuation
+                int ticksSinceLastScore = myAnimal.TicksSinceLastScore + current.G + 1; // simulate tick age when reaching this tile
+                bool willBreakStreak = ticksSinceLastScore > SS_ResetGrace;
+                int streakPenalty = willBreakStreak ? STREAK_BREAK_PENALTY : 0;
+
+
+
                 int zookeeperPenalty = ComputeZookeeperPenalty(nx, ny, myAnimal);
 
 
 
-                int newG = current.G + 1 + additionalPenalty + zookeeperPenalty - pelletBonus;
+                int newG = current.G + 1 + additionalPenalty + zookeeperPenalty + streakPenalty - pelletBonus;
+
                 int newH = Manhattan(nx, ny, targetX, targetY);
+
+                float newMultiplier = current.SimulatedMultiplier;
+                double newSimScore = current.SimulatedScore;
+                int newTicksSinceLastScore = current.TicksSinceLastScore + 1;
+
+                // Pellet? simulate multiplier gain
+                if (content == CellContent.Pellet)
+                {
+                    if (newTicksSinceLastScore <= SS_ResetGrace)
+                    {
+                        newMultiplier *= (float)SS_MultiplierGrowthFactor;
+                        newMultiplier = Math.Min(newMultiplier, SS_Max);
+                    }
+                    else
+                    {
+                        newMultiplier = 1.0f;
+                    }
+
+                    newSimScore += POINTS_PER_PELLET * newMultiplier;
+                    newTicksSinceLastScore = 0;
+                }
+
 
                 yield return new ElephantNode(
                     nx, ny,
                     newG, newH,
                     current,
-                    ComputeTieBreaker(nx, ny)
+                    ComputeTieBreaker(nx, ny),
+                    newMultiplier,
+                    newSimScore,
+                    newTicksSinceLastScore
                 );
             }
         }
@@ -2129,7 +2883,7 @@ namespace NETCoreBot.Strategy
                 var path = FindPathZookeeper(zookeeper.X, zookeeper.Y, animal.X, animal.Y, grid);
                 if (path != null && path.Count > 1)
                 {
-                    for (int i = 1; i < Math.Min(3, path.Count); i++)
+                    for (int i = 1; i < Math.Min(5, path.Count); i++)
                     {
                         var step = path[i];
                         contested.Add((step.X, step.Y));
@@ -2156,7 +2910,10 @@ namespace NETCoreBot.Strategy
                 0,
                 Manhattan(startX, startY, targetX, targetY),
                 null,
-                ComputeTieBreaker(startX, startY)
+                ComputeTieBreaker(startX, startY),
+                0,
+                0,
+                0
             );
             openSet.Add(startNode);
 
@@ -2255,7 +3012,10 @@ namespace NETCoreBot.Strategy
                     nx, ny,
                     newG, newH,
                     current,
-                    ComputeTieBreaker(nx, ny)
+                    ComputeTieBreaker(nx, ny),
+                    0,
+                    0,
+                    0
                 );
             }
         }
@@ -2292,7 +3052,10 @@ namespace NETCoreBot.Strategy
                 0,
                 Manhattan(startX, startY, targetX, targetY),
                 null,
-                ComputeTieBreaker(startX, startY)
+                ComputeTieBreaker(startX, startY),
+                0,
+                0,
+                0
             );
             openSet.Add(startNode);
 
@@ -2385,7 +3148,6 @@ namespace NETCoreBot.Strategy
             if (nextY < currentY) return BotAction.Up;
             return null;
         }
-
         private static BotAction GetDirectionV2(int fromX, int fromY, int toX, int toY)
         {
             int dx = toX - fromX;
@@ -2457,7 +3219,6 @@ namespace NETCoreBot.Strategy
                 _ => false,
             };
         }
-
         public static int FindDistance(int x, int y, int tx, int ty)
         {
             var something = FindPathZookeeper(x, y, tx, ty, GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content));
@@ -2468,9 +3229,9 @@ namespace NETCoreBot.Strategy
 
         #region Logging
 
-        public static void LogMessage(string message, ConsoleColor color = ConsoleColor.White)
+        public static void LogMessage(string message, ConsoleColor color = ConsoleColor.White, bool ov = false)
         {
-            if (ENABLE_LOGGING)
+            if (ENABLE_LOGGING || ov)
             {
                 Console.ForegroundColor = color;
                 Console.WriteLine(message);
@@ -2498,7 +3259,12 @@ namespace NETCoreBot.Strategy
         public ElephantNode? Parent;
         public int TieBreak { get; }
 
-        public ElephantNode(int x, int y, int g, int h, ElephantNode? parent, int tieBreak = 0)
+        public float SimulatedMultiplier { get; set; }
+        public double SimulatedScore { get; set; }
+        public int TicksSinceLastScore { get; set; }
+
+
+        public ElephantNode(int x,int y,int g,int h,ElephantNode? parent,int tieBreak,float simulatedMultiplier,double simulatedScore,int ticksSinceLastScore)
         {
             X = x;
             Y = y;
@@ -2506,6 +3272,10 @@ namespace NETCoreBot.Strategy
             H = h;
             Parent = parent;
             TieBreak = tieBreak;
+            SimulatedMultiplier = simulatedMultiplier;
+            SimulatedScore = simulatedScore;
+            TicksSinceLastScore = ticksSinceLastScore;
         }
+
     }
 }

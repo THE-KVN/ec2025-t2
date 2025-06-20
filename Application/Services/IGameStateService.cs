@@ -6,6 +6,7 @@ using Zooscape.Domain.Models;
 using Zooscape.Domain.Utilities;
 using Zooscape.Domain.ValueObjects;
 
+
 namespace Zooscape.Application.Services;
 
 public interface IGameStateService
@@ -15,6 +16,7 @@ public interface IGameStateService
     public IWorld World { get; }
     public Dictionary<Guid, IZookeeper> Zookeepers { get; }
     public Dictionary<Guid, IAnimal> Animals { get; }
+    public Dictionary<int, List<GridCoords>> PelletsToRespawn { get; }
 
     public bool IsReady { get; }
     public int TickCounter { get; set; }
@@ -73,4 +75,29 @@ public interface IGameStateService
     /// <returns>A <see cref="GridCoords"/> with the zookeeper's new, or unchanged, location</returns>
 
     public GridCoords MoveZookeeper(IZookeeper zookeeper);
+
+    /// <summary>
+    /// Processes the spawning of power ups/obstacles/Pellets.
+    /// </summary>
+    public void ProcessSpawning();
+
+    /// <summary>
+    /// Processes active power ups on the given animal.
+    /// </summary>
+    /// <param name="animal">The animal on which to process power ups.</param>
+    public void ProcessPowerUps(IAnimal animal);
+
+    /// <summary>
+    /// Activates the animal's held power up.
+    /// </summary>
+    /// <param name="animal">The animal on which to activate the power up.</param>
+    public void ActivatePowerUp(IAnimal animal);
+
+    /// <summary>
+    /// Gets the score for a power pellet.
+    /// </summary>
+    /// <returns>The score that a power pellet gives.</returns>
+    public int GetPowerPelletScore();
+
+    public int GetTicksUntilPelletRespawn(int tick);
 }

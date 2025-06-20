@@ -45,19 +45,19 @@ public class GameVisualizerService
                 a.IsViable,
                 a.TimeInCage,
                 AverageExecutionTime = "0",
-                CurrentTargetPellet = Rabbit.PersistentTarget != null ? new { Rabbit.PersistentTarget.X, Rabbit.PersistentTarget.Y } : null,
-                PersistentPath = Rabbit.PersistentPath?.Select(n => new { n.X, n.Y }),
-                ContestedPelletsThisTick = Rabbit.CONTESTED_CELLS_MAP.Select(p => new { p.Item1, p.Item2 }),
-                CorridorCells = Rabbit.CORRIDOR_CELLS_MAP.Select(c => new { c.Item1, c.Item2 }),
-                IsInDanger = Rabbit.IsInDanger,
-                GameStage = Rabbit.GAME_STAGE.ToString(),
-                LastMove = Rabbit.LastMove.ToString(),
+                CurrentTargetPellet = Cobra.PersistentTarget != null ? new { Cobra.PersistentTarget.X, Cobra.PersistentTarget.Y } : null,
+                PersistentPath = Cobra.PersistentPath?.Select(n => new { n.X, n.Y }),
+                ContestedPelletsThisTick = Cobra.CONTESTED_CELLS_MAP.Select(p => new { p.Item1, p.Item2 }),
+                CorridorCells = Cobra.CORRIDOR_CELLS_MAP.Select(c => new { c.Item1, c.Item2 }),
+                IsInDanger = Cobra.IsInDanger,
+                GameStage = Cobra.GAME_STAGE.ToString(),
+                LastMove = Cobra.LastMove.ToString(),
                 a.Location,
                 a.CurrentDirection,
-                ExecutionTimeExceedCount = Rabbit.ExecutionTimeExceedCount,
-                CurrentMultiplier = a.CurrentMultiplier,
-                BestCluster = Rabbit.BestCluster,
-                SafetyNetMap = Rabbit.SAFETY_NET_MAP?.Select(c => new { c.Item1, c.Item2 }),
+                ExecutionTimeExceedCount = Cobra.ExecutionTimeExceedCount,
+                CurrentMultiplier = a.ScoreStreak.Multiplier,
+                BestCluster = Cobra.BestCluster,
+                SafetyNetMap = Cobra.SAFETY_NET_MAP?.Select(c => new { c.Item1, c.Item2 }),
 
 
             }),
@@ -73,8 +73,8 @@ public class GameVisualizerService
                 CurrentPath = z.CurrentPath?.Nodes.Select(n => new { n.Coords.X, n.Coords.Y })
             }),
             Tick = _gameStateService.TickCounter,
-            Width = Rabbit.MapWidth,
-            Height = Rabbit.MapHeight
+            Width = Cobra.MapWidth,
+            Height = Cobra.MapHeight
         };
 
        

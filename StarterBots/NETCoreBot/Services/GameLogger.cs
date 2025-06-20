@@ -13,8 +13,8 @@ namespace NETCoreBot.Services
 
     public static class GameLogger
     {
-        public static bool Enabled { get; set; } = false;
-        public static bool BenchmarkEnabled { get; set; } = true;
+        public static bool Enabled { get; set; } = true;
+        public static bool BenchmarkEnabled { get; set; } = false;
         private static readonly List<(string Message, ConsoleColor Color)> _buffer = new();
 
         public static void LogInfo(string system, string message)

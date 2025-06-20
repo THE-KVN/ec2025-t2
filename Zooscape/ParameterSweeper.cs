@@ -52,15 +52,15 @@ namespace Zooscape
         /// </summary>
         public static void ApplyParameters(Dictionary<string, object> p)
         {
-            Cobra.ALPHA = Convert.ToDouble(p["ALPHA"]);
-            Cobra.VISITED_TILE_PENALTY_FACTOR = Convert.ToInt32(p["VISITED_TILE_PENALTY_FACTOR"]);
-            Cobra.REVERSING_TO_PARENT_PENALTY = Convert.ToInt32(p["REVERSING_TO_PARENT_PENALTY"]);
-            Cobra.ZOOKEEPER_AVOIDANCE_FACTOR = Convert.ToDouble(p["ZOOKEEPER_AVOIDANCE_FACTOR"]);
-            Cobra.ENEMY_PATH_AVOIDANCE = Convert.ToInt32(p["ENEMY_PATH_AVOIDANCE"]);
-            Cobra.PELLET_BONUS = Convert.ToInt32(p["PELLET_BONUS"]);
-            Cobra.DANGER_THRESHOLD = Convert.ToInt32(p["DANGER_THRESHOLD"]);
-            Cobra.MAX_PELLET_CANDIDATES = Convert.ToInt32(p["MAX_PELLET_CANDIDATES"]);
-            Cobra.CORRIDOR_PENALTY = Convert.ToInt32(p["CORRIDOR_PENALTY"]);
+            //Cobra.ALPHA = Convert.ToDouble(p["ALPHA"]);
+            //Cobra.VISITED_TILE_PENALTY_FACTOR = Convert.ToInt32(p["VISITED_TILE_PENALTY_FACTOR"]);
+            //Cobra.REVERSING_TO_PARENT_PENALTY = Convert.ToInt32(p["REVERSING_TO_PARENT_PENALTY"]);
+            //Cobra.ZOOKEEPER_AVOIDANCE_FACTOR = Convert.ToDouble(p["ZOOKEEPER_AVOIDANCE_FACTOR"]);
+            //Cobra.ENEMY_PATH_AVOIDANCE = Convert.ToInt32(p["ENEMY_PATH_AVOIDANCE"]);
+            //Cobra.PELLET_BONUS = Convert.ToInt32(p["PELLET_BONUS"]);
+            //Cobra.DANGER_THRESHOLD = Convert.ToInt32(p["DANGER_THRESHOLD"]);
+            //Cobra.MAX_PELLET_CANDIDATES = Convert.ToInt32(p["MAX_PELLET_CANDIDATES"]);
+            //Cobra.CORRIDOR_PENALTY = Convert.ToInt32(p["CORRIDOR_PENALTY"]);
         }
 
 

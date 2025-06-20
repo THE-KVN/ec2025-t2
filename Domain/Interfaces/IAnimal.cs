@@ -19,14 +19,15 @@ public interface IAnimal
     public int CapturedCounter { get; }
     public int DistanceCovered { get; }
     public bool IsViable { get; set; }
+    public ScoreStreak ScoreStreak { get; }
+    public PowerUpType? HeldPowerUp { get; set; }
+    public ActivePowerUp? ActivePowerUp { get; set; }
+    public int PowerUpsUsed { get; set; }
 
     public int TimeInCage { get; } // Add this property
     public AnimalQueue<AnimalCommand> _commandQueue { get; } // Add this property
 
-    //this is mine
 
-    public float CurrentMultiplier { get; set; }
-    public int TicksSinceLastScore { get; set; }
 
 
     /// <summary>
@@ -65,6 +66,14 @@ public interface IAnimal
     /// </summary>
     /// <param name="newScore">New score</param>
     public void SetScore(int newScore);
+
+    /// <summary>
+    /// Adds points to animal's score after multiplying by animal's score streak
+    /// </summary>
+    /// <param name="points"></param>
+    /// /// <param name="multiplier"></param>
+    public void AddToScore(int points, double multiplier);
+
 
     /// <summary>
     /// Increment's the animal's <see cref="TicksOnSpawn"/> value by 1

@@ -30,9 +30,16 @@ public class GridCoords : ValueObject
 
     public double EuclideanDistance(GridCoords coords)
     {
-        int deltaX = Math.Abs(X - coords.X);
-        int deltaY = Math.Abs(Y - coords.Y);
-        return Math.Sqrt(Math.Pow(deltaX, 2) + Math.Pow(deltaY, 2));
+        int deltaX = X - coords.X;
+        int deltaY = Y - coords.Y;
+        return Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+    }
+
+    public int EuclideanDistanceSquared(GridCoords coords)
+    {
+        int deltaX = X - coords.X;
+        int deltaY = Y - coords.Y;
+        return (deltaX * deltaX) + (deltaY * deltaY);
     }
 
     public static GridCoords operator -(GridCoords coords, GridCoords otherCoords)

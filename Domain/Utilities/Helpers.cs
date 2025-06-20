@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Zooscape.Domain.Utilities;
 
-public class Helpers
+public static class Helpers
 {
     private static readonly Random _random = new Random();
     private static List<string> _usedNames = [];

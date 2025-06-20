@@ -16,6 +16,7 @@ public class World : IWorld
     private readonly int _queueSize;
     private readonly GridCoords _zookeeperSpawnPoint;
     private readonly List<GridCoords> _animalSpawnPoints;
+    private readonly IAnimalFactory _animalFactory;
     private readonly object _animalLock = new();
 
     public CellContents[,] Cells { get; set; }
@@ -27,8 +28,9 @@ public class World : IWorld
 
     #region Constructor
 
-    public World(string mapInput, int animalCount, int queueSize)
+    public World(string mapInput, int animalCount, int queueSize, IAnimalFactory animalFactory)
     {
+        _animalFactory = animalFactory;
         _animalCount = animalCount;
         _queueSize = queueSize;
 
@@ -97,7 +99,12 @@ public class World : IWorld
                 return new ResultError($"Maximum animal count ({_animalCount}) reached.");
             }
 
-            var animal = new Animal(id, nickname, _animalSpawnPoints[Animals.Count], _queueSize);
+            var animal = _animalFactory.CreateAnimal(
+                id,
+                nickname,
+                _animalSpawnPoints[Animals.Count],
+                _queueSize
+);
 
             Animals.TryAdd(id, animal);
             return animal;

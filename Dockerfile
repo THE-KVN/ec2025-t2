@@ -1,5 +1,6 @@
 ﻿﻿FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 ENV LOG_DIR=/var/log/zooscape
+ENV ENVIRONMENT=Production
 RUN apt-get update \
     && apt-get install -y curl \
     && mkdir -p $LOG_DIR \

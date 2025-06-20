@@ -1,4 +1,7 @@
-﻿namespace Zooscape.Infrastructure.SignalRHub.Models;
+﻿using Zooscape.Domain.Enums;
+using Zooscape.Domain.Models;
+
+namespace Zooscape.Infrastructure.SignalRHub.Models;
 
 public class Animal
 {
@@ -12,4 +15,6 @@ public class Animal
     public int CapturedCounter { get; set; }
     public int DistanceCovered { get; set; }
     public bool IsViable { get; set; }
+    public PowerUpType? HeldPowerUp { get; set; }
+    public ActivePowerUp? ActivePowerUp { get; set; }
 }

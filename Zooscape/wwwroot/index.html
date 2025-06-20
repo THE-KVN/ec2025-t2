@@ -89,6 +89,12 @@
     <img id="redBotSprite" src="Content/sprites/redGhost.png" style="display:none;" />
     <img id="yellowBotSprite" src="Content/sprites/yellowGhost.png" style="display:none;" />
 
+    <img id="cageSprite" src="Content/sprites/cage.png" style="display:none;" />
+    <img id="powerup1Sprite" src="Content/sprites/powerup1.png" style="display:none;" />
+    <img id="powerup2Sprite" src="Content/sprites/powerup2.png" style="display:none;" />
+    <img id="powerup3Sprite" src="Content/sprites/powerup3.png" style="display:none;" />
+    <img id="powerup4Sprite" src="Content/sprites/powerup4.png" style="display:none;" />
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/5.0.11/signalr.min.js"></script>
     <script>
         const connection = new signalR.HubConnectionBuilder()
@@ -131,7 +137,7 @@
             const anyAnimalInDanger = gameState.animals.some(animal => animal.isInDanger);
             document.body.style.backgroundColor = anyAnimalInDanger ? 'red' : 'black';
 
-           
+
             document.getElementById("tickCounter").innerText = `Tick: ${gameState.tick}`;
 
             console.log(gameState);
@@ -144,33 +150,33 @@
             });
 
 
-            
+
             gameState.cells.forEach(cell => drawCell(context, cell));
-            
+
 
             const animalTableBody = document.getElementById("animalTable").querySelector("tbody");
             animalTableBody.innerHTML = "";
 
             const sortedAnimals = gameState.animals.slice().sort((a, b) => b.score - a.score);
             sortedAnimals.forEach(animal => {
-                
+
 
                 //if (animal.currentTargetPellet) {
                 //    drawCurrentTargetPellet(context, animal.currentTargetPellet);
                 //}
 
 
-                //if (animal.bestCluster && animal.bestCluster.cells) {
-                //    animal.bestCluster.cells.forEach(path => drawCluster(context, path.x, path.y, gameState));
-                //}
+                if (animal.bestCluster && animal.bestCluster.cells) {
+                    animal.bestCluster.cells.forEach(path => drawCluster(context, path.x, path.y, gameState));
+                }
 
-                //if (animal.bestCluster && animal.bestCluster.entryPoint) {
-                //    drawCurrentTargetPellet(context, animal.bestCluster.entryPoint);
-                //}
+                if (animal.bestCluster && animal.bestCluster.entryPoint) {
+                    drawCurrentTargetPellet(context, animal.bestCluster.entryPoint);
+                }
 
-                //if (animal.bestCluster && animal.bestCluster.path) {
-                //    animal.bestCluster.path.forEach(path => drawCurrentPath(context, path.x, path.y, gameState));
-                //}
+                if (animal.bestCluster && animal.bestCluster.path) {
+                    animal.bestCluster.path.forEach(path => drawCurrentPath(context, path.x, path.y, gameState));
+                }
 
                 //if (animal.contestedPelletsThisTick) {
                 //    animal.contestedPelletsThisTick.forEach(path => drawContestedPellets(context, path.item1, path.item2, gameState));
@@ -182,9 +188,9 @@
 
 
 
-                if (animal.safetyNetMap && animal.safetyNetMap.length > 0) {
-                    animal.safetyNetMap.forEach(map => drawSafetyNetMap(context, map.item1, map.item2, gameState));
-                }
+                //if (animal.safetyNetMap && animal.safetyNetMap.length > 0) {
+                //    animal.safetyNetMap.forEach(map => drawSafetyNetMap(context, map.item1, map.item2, gameState));
+                //}
 
                 if (animal.persistentPath) {
                     animal.persistentPath.forEach(path => drawCurrentPath(context, path.x, path.y, gameState));
@@ -197,15 +203,15 @@
                 const row = document.createElement("tr");
                 row.style.backgroundColor = getColorForAnimal(animal.nickname);
                 row.innerHTML = `
-                        <td>${animal.nickname}</td>
-                        <td>${animal.score}</td>
-                        <td>${animal.capturedCounter}</td>
-                        <td>${animal.distanceCovered}</td>
-                        <td>${animal.isViable}</td>
-                        <td>${animal.currentMultiplier}</td>
-                        <td>${animal.executionTimeExceedCount}</td>
-                        <td>${animal.averageExecutionTime}</td>
-                    `;
+                                            <td>${animal.nickname}</td>
+                                            <td>${animal.score}</td>
+                                            <td>${animal.capturedCounter}</td>
+                                            <td>${animal.distanceCovered}</td>
+                                            <td>${animal.isViable}</td>
+                                            <td>${animal.currentMultiplier}</td>
+                                            <td>${animal.executionTimeExceedCount}</td>
+                                            <td>${animal.averageExecutionTime}</td>
+                                        `;
                 animalTableBody.appendChild(row);
 
 
@@ -228,14 +234,14 @@
 
                 const row = document.createElement("tr");
                 row.innerHTML = `
-            <td>${zookeeper.nickname}</td>
-            <td>${zookeeper.currentTargetId ? zookeeper.currentTargetId.nickname : 'None'}</td>
-        `;
+                                <td>${zookeeper.nickname}</td>
+                                <td>${zookeeper.currentTargetId ? zookeeper.currentTargetId.nickname : 'None'}</td>
+                            `;
                 zookeeperTableBody.appendChild(row);
             });
 
 
-            
+
 
 
         });
@@ -244,7 +250,7 @@
 
         function drawCurrentTargetPellet(context, pellet) {
             context.fillStyle = "blue";
-            context.fillRect((axisOffsetX + pellet.x) * 24, (axisOffsetY +pellet.y) * 24, 24, 24);
+            context.fillRect((axisOffsetX + pellet.x) * 24, (axisOffsetY + pellet.y) * 24, 24, 24);
             context.drawImage(document.getElementById("pelletSprite"), (axisOffsetX + pellet.x) * 24, (axisOffsetY + pellet.y) * 24, 24, 24);
         }
 
@@ -327,7 +333,7 @@
                 if (cell.content === 1) {
                     context.strokeStyle = "blue";
                     context.lineWidth = 2;
-                    context.strokeRect((axisOffsetX + cell.x) * 24, (axisOffsetY +cell.y) * 24, 24, 24);
+                    context.strokeRect((axisOffsetX + cell.x) * 24, (axisOffsetY + cell.y) * 24, 24, 24);
                 }
             }
         }
@@ -335,7 +341,7 @@
         function drawAnimal(context, animal, spriteIndex) {
             const sprite = getSpriteForAnimal(spriteIndex);
             if (sprite) {
-                context.drawImage(sprite, (axisOffsetX + animal.x) * 24, (axisOffsetY +animal.y) * 24, 24, 24);
+                context.drawImage(sprite, (axisOffsetX + animal.x) * 24, (axisOffsetY + animal.y) * 24, 24, 24);
             }
         }
 
@@ -345,7 +351,11 @@
                 case 1: return null;
                 case 2: return document.getElementById("pelletSprite");
                 case 3: return null;
-                case 4: return null;
+                case 4: return document.getElementById("cageSprite");
+                case 5: return document.getElementById("powerup1Sprite");
+                case 6: return document.getElementById("powerup2Sprite");
+                case 7: return document.getElementById("powerup3Sprite");
+                case 8: return document.getElementById("powerup4Sprite");
                 default: return null;
             }
         }

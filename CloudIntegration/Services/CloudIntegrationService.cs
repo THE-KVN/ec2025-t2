@@ -46,6 +46,10 @@ public class CloudIntegrationService : ICloudIntegrationService
         if (cloudPayload.Players != null)
             cloudPayload.Players = _players;
 
+        if (_appSettings.IsLocal)
+            return;
+
+
         try
         {
             var result = await _httpClient.PostAsync(

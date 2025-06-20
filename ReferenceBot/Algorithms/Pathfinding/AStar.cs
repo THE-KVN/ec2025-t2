@@ -41,7 +41,7 @@ public class AStar
                 {
                     continue;
                 }
-                neighbour.HCost = neighbour.Coords.ManhattanDistance(end);
+                neighbour.HCost = CalculateHCost(world, neighbour);
 
                 if (openSet.Add(neighbour))
                 {
@@ -58,6 +58,20 @@ public class AStar
         }
 
         return null;
+    }
+
+    private static int CalculateHCost(Cell[,] world, Node neighbour)
+    {
+        var contents = world[neighbour.X, neighbour.Y];
+        return contents.Content switch
+        {
+            CellContent.Pellet => 5,
+            CellContent.Scavenger => 10,
+            CellContent.ChameleonCloak => 10,
+            CellContent.BigMooseJuice => 10,
+            CellContent.PowerPellet => 20,
+            _ => 0,
+        };
     }
 
     private static HashSet<Node> Neighbours(Cell[,] world, Node node)
@@ -86,7 +100,12 @@ public class AStar
         return world[coords.X, coords.Y].Content
             is CellContent.Empty
                 or CellContent.Pellet
-                or CellContent.ZookeeperSpawn;
+                or CellContent.ZookeeperSpawn
+                or CellContent.ZookeeperSpawn
+                or CellContent.PowerPellet
+                or CellContent.ChameleonCloak
+                or CellContent.BigMooseJuice
+                or CellContent.Scavenger;
     }
 
     private static bool IsPointInBounds(Cell[,] world, GridCoords coords)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -10,14 +10,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Zooscape.Application.Config;
 using Zooscape.Application.Events;
-using Zooscape.Application.Services;
 using Zooscape.Domain.Enums;
 using Zooscape.Domain.ExtensionMethods;
 using Zooscape.Domain.Interfaces;
 using Zooscape.Domain.Models;
 using Zooscape.Domain.Utilities;
+using Zooscape.Domain.ValueObjects;
 
-namespace Zooscape.Application;
+namespace Zooscape.Application.Services;
 
 public class WorkerService : BackgroundService
 {
@@ -33,6 +33,9 @@ public class WorkerService : BackgroundService
     private readonly IEventDispatcher _logDiffStateEventDispatcher;
     private readonly IHostApplicationLifetime _applicationLifetime;
 
+    private readonly List<(int tick, TimeSpan duration, double dutyCycle)> _ticksTiming;
+
+    //noinspection csharpsquid:S107
     public WorkerService(
         ILogger<WorkerService> logger,
         IOptions<GameSettings> gameSettingsOptions,
@@ -58,6 +61,7 @@ public class WorkerService : BackgroundService
         _logStateEventDispatcher = logStateEventDispatcher;
         _logDiffStateEventDispatcher = logDiffStateEventDispatcher;
         _applicationLifetime = applicationLifetime;
+        _ticksTiming = [];
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -130,12 +134,12 @@ public class WorkerService : BackgroundService
             {
                 await Task.Delay(100, cancellationTokenSource.Token);
             }
-            catch (TaskCanceledException)
+            catch (TaskCanceledException ex)
             {
                 if (cancellationToken.IsCancellationRequested)
-                    _logger.LogError("Waiting cancelled by external request.");
+                    _logger.LogError(ex, "Waiting cancelled by external request.");
                 else
-                    _logger.LogError("Timeout waiting for game ready state.");
+                    _logger.LogError(ex, "Timeout waiting for game ready state.");
 
                 return false;
             }
@@ -157,20 +161,6 @@ public class WorkerService : BackgroundService
 
             _gameStateService.TickCounter++;
 
-            //mine
-            foreach (var (_, animal) in _gameStateService.Animals)
-            {
-                animal.TicksSinceLastScore++;
-            }
-
-            ////Step 0b: Add additional zookeepers dynamically
-            //if (_gameStateService.TickCounter == 100 ||
-            //    (_gameStateService.TickCounter > 100 && (_gameStateService.TickCounter - 100) % 300 == 0))
-            //{
-            //    _logger.LogInformation($"Tick {_gameStateService.TickCounter}: Adding a new zookeeper");
-            //    _gameStateService.AddZookeeper();
-            //}
-
             if (_gameLogsConfig.FullLogsEnabled)
                 await _logStateEventDispatcher.Dispatch(new GameStateEvent(_gameStateService));
 
@@ -182,8 +172,6 @@ public class WorkerService : BackgroundService
             var animalsWithoutCommands = new List<IAnimal>();
             foreach (var (_, animal) in _gameStateService.Animals)
             {
-                
-
                 var command = animal.GetNextCommand();
 
                 if (command == null)
@@ -200,8 +188,16 @@ public class WorkerService : BackgroundService
             {
                 var animal = _gameStateService.Animals[command.BotId];
 
-                // Step 4: Set direction
-                animal.SetDirection(command.Action.ToDirection());
+                // Step 4a: Use active power up.
+                if (command.Action == BotAction.UseItem)
+                {
+                    _gameStateService.ActivatePowerUp(animal);
+                }
+                // Step 4b: Set direction
+                else
+                {
+                    animal.SetDirection(command.Action.ToDirection());
+                }
 
                 // Step 5: Set new position
                 _gameStateService.MoveAnimal(animal);
@@ -211,6 +207,9 @@ public class WorkerService : BackgroundService
 
                 // Step 7: Update viability
                 animal.IsViable = animal.Location != animal.SpawnPoint;
+
+                // Step 8: Process power ups
+                _gameStateService.ProcessPowerUps(animal);
             }
 
             // Step 3b: Iterate over animals for which no command was received
@@ -221,12 +220,15 @@ public class WorkerService : BackgroundService
 
                 // Step 7b: Update viability
                 animal.IsViable = animal.Location != animal.SpawnPoint;
+
+                // Step 8: Process power ups
+                _gameStateService.ProcessPowerUps(animal);
             }
 
-            // Step 8: Iterate over zookeepers
+            // Step 9: Iterate over zookeepers
             foreach (var (id, zookeeper) in _gameStateService.Zookeepers)
             {
-                // Step 9: Calculate new direction
+                // Step 10: Calculate new direction
                 var newDirection = Helpers.TrackExecutionTime(
                     "CalculateZookeeperDirection",
                     () =>
@@ -235,55 +237,132 @@ public class WorkerService : BackgroundService
                 );
                 zookeeper.SetDirection(newDirection);
 
-                // Step 10: Set new position
+                // Step 11: Set new position
                 _gameStateService.MoveZookeeper(zookeeper);
 
-                // Step 11: Apply consequences
+                // Step 12: Apply consequences
                 ApplyZookeeperConsequences(zookeeper);
             }
+
+            // Step 13: Process spawning
+
+
+           _gameStateService.ProcessSpawning();
+
+            
 
             foreach (var (id, animal) in _gameStateService.Animals)
             {
                 await _cloudEventDispatcher.Dispatch(new UpdatePlayerEvent(id, animal.Score));
             }
 
-            // Step 12: Check end conditions
+            // Step 14: Check end conditions
             if (
                 !_gameStateService.World.Cells.Cast<CellContents>().Contains(CellContents.Pellet)
                 || _gameStateService.TickCounter >= _gameSettings.MaxTicks
             )
             {
-                var numPelletsLeft = _gameStateService
-                    .World.Cells.Cast<CellContents>()
-                    .Count(contents => contents == CellContents.Pellet);
-                _logger.LogInformation(
-                    $"Game end conditions met. Game Over. There are {numPelletsLeft} pellets left."
-                );
-                var orderedAnimals = _gameStateService
-                    .Animals.Values.OrderBy(animal => animal.Score)
-                    .Reverse();
-                int placement = 1;
-                foreach (var animal in orderedAnimals)
-                {
-                    _logger.LogInformation(
-                        $"{placement}: {animal.Nickname}, Score: {animal.Score}, Captured: {animal.CapturedCounter}"
-                    );
-                    await _cloudEventDispatcher.Dispatch(
-                        new UpdatePlayerEvent(animal.Id, animal.Score, animal.Score, placement++)
-                    );
-                }
+                await GameOver();
                 stopWatch.Stop();
                 return;
             }
 
-            // Step 13: Send game state to bots and visualisers
+            // Step 15: Send game state to bots and visualisers
             await _signalREventDispatcher.Dispatch(new GameStateEvent(_gameStateService));
 
-            var measuredTickDuration = stopWatch.Elapsed.TotalMilliseconds;
-            var dutyCycle = 1.0 * measuredTickDuration / _gameSettings.TickDuration;
+            var measuredTickDuration = stopWatch.Elapsed;
+            var dutyCycle =
+                1.0 * measuredTickDuration.TotalMilliseconds / _gameSettings.TickDuration;
+
+            _ticksTiming.Add((_gameStateService.TickCounter, measuredTickDuration, dutyCycle));
+
+            var tickMsg =
+                $"Game tick {_gameStateService.TickCounter}, Duration = {measuredTickDuration.TotalMilliseconds:F2} / {_gameSettings.TickDuration}, Duty Cycle = {dutyCycle:F4}";
+
+            // Track ticks that exceed duty cycle
+            if (dutyCycle >= 1)
+            {
+                _logger.LogWarning(tickMsg);
+            }
+            else
+            {
+                _logger.LogInformation(tickMsg);
+            }
+        }
+    }
+
+    private async Task GameOver()
+    {
+        var numPelletsLeft = _gameStateService
+            .World.Cells.Cast<CellContents>()
+            .Count(contents => contents == CellContents.Pellet);
+        _logger.LogInformation(
+            "Game end conditions met. Game Over. There are {NumPelletsLeft} pellets left.",
+            numPelletsLeft
+        );
+
+        if (_ticksTiming.Count > 0)
+        {
+            _logger.LogInformation(
+                "There were {NumTicks} ticks that exceeded the duty cycle:",
+                _ticksTiming.Where(x => x.dutyCycle >= 1).Count()
+            );
+            foreach (
+                (int tick, TimeSpan duration, double dutyCycle) in _ticksTiming.Where(x =>
+                    x.dutyCycle >= 1
+                )
+            )
+            {
+                _logger.LogInformation(
+                    "Tick: {Tick}, Duration: {TotalMs:F2} / {TickDuration}, Duty Cycle: {DutyCycle:F4}",
+                    tick,
+                    duration.TotalMilliseconds,
+                    _gameSettings.TickDuration,
+                    dutyCycle
+                );
+            }
+
+            var maxTickDuration = _ticksTiming.MaxBy(tuple => tuple.duration);
+            _logger.LogInformation(
+                "The longest running tick was {MaxDurationTick} with a duration of {TotalMs:F2}ms",
+                maxTickDuration.tick,
+                maxTickDuration.duration.TotalMilliseconds
+            );
 
             _logger.LogInformation(
-                $"Game tick {_gameStateService.TickCounter}, Duration = {Math.Round(measuredTickDuration, 2)} / {_gameSettings.TickDuration}, Duty Cycle = {Math.Round(dutyCycle, 4)}"
+                "Average tick duration {AverageDuration:F2}ms for a duty cycle of {DutyCycle:F2}",
+                _ticksTiming.Average(x => x.duration.TotalMilliseconds),
+                _ticksTiming.Average(x => x.dutyCycle)
+            );
+        }
+
+        foreach (var (captureGroup, value) in Helpers.TrackedExecutionTimes())
+        {
+            _logger.LogInformation(
+                "Execution time for {CaptureGroup} (max/min/avg): {Max:F2}ms / {Min:F2}ms / {Avg:F2}ms",
+                captureGroup,
+                value.Max,
+                value.Min,
+                value.Avg
+            );
+        }
+
+        var orderedAnimals = _gameStateService
+            .Animals.Values.OrderBy(animal => animal.Score)
+            .Reverse();
+        int placement = 1;
+        foreach (var animal in orderedAnimals)
+        {
+            _logger.LogInformation(
+                "{Placement}: {Animal}, Score: {Score}, Captured: {CaputuredCount}, Power Ups Used: {PowerUpsUsed}",
+                placement,
+                animal.Nickname,
+                animal.Score,
+                animal.CapturedCounter,
+                animal.PowerUpsUsed
+            );
+            await _cloudEventDispatcher.Dispatch(
+                new UpdatePlayerEvent(animal.Id, animal.Score, animal.Score, placement++)
             );
         }
     }
@@ -297,40 +376,65 @@ public class WorkerService : BackgroundService
             return;
         }
 
+        var cellContents = _gameStateService.World.GetCellContents(animal.Location);
+
         // Did the animal collect a pellet?
-        if (_gameStateService.World.GetCellContents(animal.Location) == CellContents.Pellet)
+        if (cellContents == CellContents.Pellet)
         {
-            animal.SetScore(animal.Score + _gameSettings.PointsPerPellet);
+            animal.AddToScore(
+                _gameSettings.PointsPerPellet,
+                _gameSettings.PowerUps.Types[PowerUpType.BigMooseJuice.ToName()].Value
+            );
+            _gameStateService.World.SetCellContents(animal.Location, CellContents.Empty);
+
+            //adding pellet to list to be respawned
+            int pelletRespawnTick = _gameStateService.GetTicksUntilPelletRespawn(
+                _gameStateService.TickCounter
+            );
+            if (!_gameStateService.PelletsToRespawn.ContainsKey(pelletRespawnTick))
+            {
+                _gameStateService.PelletsToRespawn.Add(pelletRespawnTick, new List<GridCoords>());
+            }
+            _logger.LogInformation(
+                "Respawning pellet at {AnimalLocation} in {PelletRespawnTick} ticks",
+                animal.Location,
+                pelletRespawnTick
+            );
+            _gameStateService.PelletsToRespawn[pelletRespawnTick].Add(animal.Location);
+        }
+        else
+        {
+            animal.ScoreStreak.CoolDown();
+        }
+
+        // Did the animal collect a power pellet?
+        if (cellContents == CellContents.PowerPellet)
+        {
+            _logger.LogInformation("Animal {Animal} picked up a power pellet.", animal.Nickname);
+            animal.AddToScore(
+                _gameStateService.GetPowerPelletScore(),
+                _gameSettings.PowerUps.Types[PowerUpType.BigMooseJuice.ToName()].Value
+            );
             _gameStateService.World.SetCellContents(animal.Location, CellContents.Empty);
         }
 
-        //if (_gameStateService.World.GetCellContents(animal.Location) == CellContents.Pellet)
-        //{
-        //    var streakSettings = _gameSettings.ScoreStreak;
+        List<CellContents> powerUps =
+        [
+            CellContents.Scavenger,
+            CellContents.ChameleonCloak,
+            CellContents.BigMooseJuice,
+        ];
 
-        //    if (animal.TicksSinceLastScore <= streakSettings.ResetGrace)
-        //    {
-        //        animal.CurrentMultiplier *= (float)streakSettings.MultiplierGrowthFactor;
-        //        animal.CurrentMultiplier = Math.Min(animal.CurrentMultiplier, streakSettings.Max);
-        //    }
-        //    else
-        //    {
-        //        animal.CurrentMultiplier = 1.0f;
-        //    }
-
-        //    int streakedScore = (int)Math.Round(_gameSettings.PointsPerPellet * animal.CurrentMultiplier);
-        //    animal.SetScore(animal.Score + streakedScore);
-
-        //    // Reset streak tracker
-        //    animal.TicksSinceLastScore = 0;
-
-        //    //_logger.LogError($"{animal.Nickname} collected a pellet with multiplier {animal.CurrentMultiplier:F2} (Score +{streakedScore})");
-
-
-        //    // Remove pellet
-        //    _gameStateService.World.SetCellContents(animal.Location, CellContents.Empty);
-        //}
-
+        if (powerUps.Contains(cellContents) && animal.HeldPowerUp == null)
+        {
+            _logger.LogInformation(
+                "Animal {Nickname} picked up a {CellContents}.",
+                animal.Nickname,
+                cellContents
+            );
+            animal.HeldPowerUp = cellContents.ToPowerUpType();
+            _gameStateService.World.SetCellContents(animal.Location, CellContents.Empty);
+        }
 
         // Did the animal run into a zookeeper?
         if (_gameStateService.Zookeepers.Any(z => z.Value.Location == animal.Location))

@@ -42,6 +42,9 @@ using Serilog.Sinks.File.GZip;
 using Microsoft.Extensions.Configuration;
 using System.Globalization;
 
+using Zooscape.Domain.Interfaces;
+
+
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 
 var configuration = new ConfigurationBuilder()
@@ -116,6 +119,9 @@ using (LogContext.PushProperty("ConsoleOnly", true))
                     "logDiffState"
                     );
 
+                    services.AddSingleton<IPowerUpService, PowerUpService>();
+                    services.AddSingleton<IObstacleService, ObstacleService>();
+
                     S3.LogDirectory =
                     Environment.GetEnvironmentVariable("LOG_DIR")
                     ?? Path.Combine(AppContext.BaseDirectory, "logs");
@@ -143,6 +149,8 @@ using (LogContext.PushProperty("ConsoleOnly", true))
                     services.AddSingleton<IZookeeperService, ZookeeperService>();
 
                     services.AddTransient<BotHub>();
+
+                    services.AddTransient<IAnimalFactory, AnimalFactory>();
 
                     services.AddSingleton<IGameStateService, GameStateService>();
 
@@ -204,11 +212,9 @@ using (LogContext.PushProperty("ConsoleOnly", true))
         List<Task> botTasks = new();
         botTasks.Add(StartOmNomNomDebug());
 
-        StartAnimalBot("Gorilla", "G1");
-        //StartAnimalBot("Penguin", "P1");
+        StartAnimalBot("Tiger", "T1");
+        StartAnimalBot("Cheetah", "C1");
         StartAnimalBot("Snake", "S1");
-        //StartAnimalBot("Cobra", "C1");
-        StartAnimalBot("Elephant", "E1");
         // Keep bots running
         await Task.WhenAll(botTasks);
 

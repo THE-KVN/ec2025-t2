@@ -8,6 +8,7 @@ namespace NETCoreBot.Models
 {
     public enum GameStage
     {
+        WarmUp,
         EarlyGame,
         MidGame,
         LateGame    

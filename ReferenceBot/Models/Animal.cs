@@ -1,4 +1,6 @@
-﻿namespace ReferenceBot.Models;
+﻿using ReferenceBot.Enums;
+
+namespace ReferenceBot.Models;
 
 public class Animal
 {
@@ -11,4 +13,6 @@ public class Animal
     public int CapturedCounter { get; set; }
     public int DistanceCovered { get; set; }
     public bool IsViable { get; set; }
+    public PowerUpType? HeldPowerUp { get; set; }
+    public ActivePowerUp? ActivePowerUp { get; set; }
 }

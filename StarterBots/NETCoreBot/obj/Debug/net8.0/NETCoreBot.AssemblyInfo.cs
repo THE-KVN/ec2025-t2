@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NETCoreBot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+758a507c8526ff9d7c34da362918bc4e78d93004")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7cdad058675c6698e3b70027b7f1828f44c9e5d6")]
 [assembly: System.Reflection.AssemblyProductAttribute("NETCoreBot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NETCoreBot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -147,9 +147,9 @@ public class BotHub : Hub
         if (!enqueueResult.IsSuccess)
         {
             _logger.LogError(
-                "Command ({action}) not enqueued for bot ({botId}). Error: {error}",
+                "Command ({action}) not enqueued for bot ({botNickname}). Error: {error}",
                 botCommand.Action,
-                bot.BotId,
+                bot.Nickname,
                 enqueueResult.Error?.ToString()
             );
             return;
@@ -158,13 +158,13 @@ public class BotHub : Hub
         //if (bot.Nickname == "OmNomNom")
         //{
         //    _logger.LogError(
-        //    "Command ({action}) enqueued for bot ({botId}). Queue length: {queueLength}",
+        //    "Command ({action}) enqueued for bot ({botNickname}). Queue length: {queueLength}",
         //    botCommand.Action,
         //    bot.Nickname,
         //    enqueueResult.Value
         //);
         //}
-        
+
     }
 
     #endregion

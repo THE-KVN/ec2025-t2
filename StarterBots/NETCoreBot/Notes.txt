@@ -1,22 +1,14 @@
-﻿
-
-General Imporvements
+﻿Strategy Log
 
 
-// Apply Parameter
--- Tune Mid Game Parameters
+Rabbit - First bot after update pellet respwans update. 
+Snake - Enable zookeeper avoidance for early game stage, since it never switched over.
+Tiger - Changed early game path finding to have limited best cluster size of 75 and then calculate longest path in cluster using dfs. Might be a bit less optimal but give us the ability to add power ups in longest path calcutation. 
+Cheetah - ** Multiple zoo keepers avoidance
 
-// Respawn Logic
+Cobra - Warm up game state & Power Pellet
+- find path escape
+- find path opponent
+- find path 
 
-// Zookeeper Avoidance Logic
--- Use A-star to calculate how far the neaerest zookeeper is
--- Multiple Zoopers : Animal keep swithing direction to opposite portal but then walks right into another zookeeper or keep changin paths until caught 
-
-// Path Validation
-
-// Find target
--- If you're behind, become riskier (contest more). If you're ahead, play safer. (might not work but review it)
-
-// Find path to target
-
-// Compute next move
+Elephant - Respawn logic

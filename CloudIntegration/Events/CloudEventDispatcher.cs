@@ -3,12 +3,18 @@ using System.Threading.Tasks;
 using Zooscape.Application.Events;
 using Zooscape.Infrastructure.CloudIntegration.Enums;
 using Zooscape.Infrastructure.CloudIntegration.Services;
+using Microsoft.Extensions.Options;
+using Zooscape.Application.Config;
 
 namespace Zooscape.Infrastructure.CloudIntegration.Events;
 
-public class CloudEventDispatcher(ICloudIntegrationService cloudIntegrationService)
-    : IEventDispatcher
+public class CloudEventDispatcher(
+    ICloudIntegrationService cloudIntegrationService,
+    IOptions<GameSettings> gameSettings
+) : IEventDispatcher
 {
+
+    private readonly GameSettings _gameSettings = gameSettings.Value;
     public async Task Dispatch<TEvent>(TEvent gameEvent)
         where TEvent : class
     {
@@ -24,19 +30,19 @@ public class CloudEventDispatcher(ICloudIntegrationService cloudIntegrationServi
                 _ => throw new ArgumentOutOfRangeException(paramName: nameof(gameEvent)),
             };
             await cloudIntegrationService.Announce(
-                cloudCallbackType,
-                cloudCallbackEvent.Exception,
-                null,
-                cloudCallbackEvent.Ticks
+                callbackType: cloudCallbackType,
+                e: cloudCallbackEvent.Exception,
+                seed: _gameSettings.Seed,
+                ticks: cloudCallbackEvent.Ticks
             );
         }
         else if (gameEvent is UpdatePlayerEvent updatePlayerEvent)
         {
             cloudIntegrationService.UpdatePlayer(
-                updatePlayerEvent.PlayerId.ToString(),
-                updatePlayerEvent.FinalScore,
-                updatePlayerEvent.MatchScore,
-                updatePlayerEvent.Placement
+                playerId: updatePlayerEvent.PlayerId.ToString(),
+                finalScore: updatePlayerEvent.FinalScore,
+                matchPoints: updatePlayerEvent.MatchScore,
+                placement: updatePlayerEvent.Placement
             );
         }
     }

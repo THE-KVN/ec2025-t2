@@ -32,6 +32,8 @@ public class GameState
                 CapturedCounter = a.CapturedCounter,
                 DistanceCovered = a.DistanceCovered,
                 IsViable = a.IsViable,
+                HeldPowerUp = a.HeldPowerUp,
+                ActivePowerUp = a.ActivePowerUp,
             })
             .ToList();
 

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Zooscape.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7cdad058675c6698e3b70027b7f1828f44c9e5d6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5fb231146fb23054cab92888b4a96c52999a7e74")]
 [assembly: System.Reflection.AssemblyProductAttribute("Zooscape.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Zooscape.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

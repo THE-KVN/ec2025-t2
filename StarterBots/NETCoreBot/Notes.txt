@@ -2,13 +2,12 @@
 
 
 Rabbit - First bot after update pellet respwans update. 
-Snake - Enable zookeeper avoidance for early game stage, since it never switched over.
+Snake [check point] - Enable zookeeper avoidance for early game stage, since it never switched over.
 Tiger - Changed early game path finding to have limited best cluster size of 75 and then calculate longest path in cluster using dfs. Might be a bit less optimal but give us the ability to add power ups in longest path calcutation. 
 Cheetah - ** Multiple zoo keepers avoidance
+Cobra - Power Pellet
 
-Cobra - Warm up game state & Power Pellet
-- find path escape
-- find path opponent
-- find path 
 
-Elephant - Respawn logic
+Elephant - Respawn logic & warm up logic & animal location to contested
+
+Gorialla - Cloak 

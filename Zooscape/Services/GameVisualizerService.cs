@@ -45,21 +45,21 @@ public class GameVisualizerService
                 a.IsViable,
                 a.TimeInCage,
                 AverageExecutionTime = "0",
-                CurrentTargetPellet = Cobra.PersistentTarget != null ? new { Cobra.PersistentTarget.X, Cobra.PersistentTarget.Y } : null,
-                PersistentPath = Cobra.PersistentPath?.Select(n => new { n.X, n.Y }),
-                ContestedPelletsThisTick = Cobra.CONTESTED_CELLS_MAP.Select(p => new { p.Item1, p.Item2 }),
-                CorridorCells = Cobra.CORRIDOR_CELLS_MAP.Select(c => new { c.Item1, c.Item2 }),
-                IsInDanger = Cobra.IsInDanger,
-                GameStage = Cobra.GAME_STAGE.ToString(),
-                LastMove = Cobra.LastMove.ToString(),
+                CurrentTargetPellet = Gorilla.PersistentTarget != null ? new { Gorilla.PersistentTarget.X, Gorilla.PersistentTarget.Y } : null,
+                PersistentPath = Gorilla.PersistentPath?.Select(n => new { n.X, n.Y }),
+                ContestedPelletsThisTick = Gorilla.CONTESTED_CELLS_MAP.Select(p => new { p.Item1, p.Item2 }),
+                CorridorCells = Gorilla.CORRIDOR_CELLS_MAP.Select(c => new { c.Item1, c.Item2 }),
+                IsInDanger = Gorilla.IsInDanger,
+                GameStage = Gorilla.GAME_STAGE.ToString(),
+                LastMove = Gorilla.LastMove.ToString(),
                 a.Location,
                 a.CurrentDirection,
-                ExecutionTimeExceedCount = Cobra.ExecutionTimeExceedCount,
+                ExecutionTimeExceedCount = Gorilla.ExecutionTimeExceedCount,
                 CurrentMultiplier = a.ScoreStreak.Multiplier,
-                BestCluster = Cobra.BestCluster,
-                SafetyNetMap = Cobra.SAFETY_NET_MAP?.Select(c => new { c.Item1, c.Item2 }),
-
-
+                BestCluster = Gorilla.BestCluster,
+                SafetyNetMap = Gorilla.SAFETY_NET_MAP?.Select(c => new { c.Item1, c.Item2 }),
+                HeldPowerUp = a.HeldPowerUp.HasValue ? a.HeldPowerUp.Value.ToString() : "none",
+                ActivePowerUp = a.ActivePowerUp != null ? a.ActivePowerUp.Value.ToString() : "none",
             }),
             zookeepers = _gameStateService.Zookeepers.Values.Select(z => new
             {
@@ -73,8 +73,8 @@ public class GameVisualizerService
                 CurrentPath = z.CurrentPath?.Nodes.Select(n => new { n.Coords.X, n.Coords.Y })
             }),
             Tick = _gameStateService.TickCounter,
-            Width = Cobra.MapWidth,
-            Height = Cobra.MapHeight
+            Width = Gorilla.MapWidth,
+            Height = Gorilla.MapHeight
         };
 
        

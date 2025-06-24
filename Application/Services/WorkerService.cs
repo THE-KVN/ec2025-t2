@@ -413,7 +413,7 @@ public class WorkerService : BackgroundService
             _logger.LogInformation("Animal {Animal} picked up a power pellet.", animal.Nickname);
             animal.AddToScore(
                 _gameStateService.GetPowerPelletScore(),
-                _gameSettings.PowerUps.Types[PowerUpType.BigMooseJuice.ToName()].Value
+                _gameSettings.PowerUps.Types[PowerUpType.PowerPellet.ToName()].Value
             );
             _gameStateService.World.SetCellContents(animal.Location, CellContents.Empty);
         }

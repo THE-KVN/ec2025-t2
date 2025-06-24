@@ -214,7 +214,9 @@ using (LogContext.PushProperty("ConsoleOnly", true))
 
         StartAnimalBot("Tiger", "T1");
         StartAnimalBot("Cheetah", "C1");
-        StartAnimalBot("Snake", "S1");
+        StartAnimalBot("Elephant", "E1");
+
+
         // Keep bots running
         await Task.WhenAll(botTasks);
 

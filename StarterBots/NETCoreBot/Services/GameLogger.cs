@@ -13,7 +13,7 @@ namespace NETCoreBot.Services
 
     public static class GameLogger
     {
-        public static bool Enabled { get; set; } = true;
+        public static bool Enabled { get; set; } = false;
         public static bool BenchmarkEnabled { get; set; } = false;
         private static readonly List<(string Message, ConsoleColor Color)> _buffer = new();
 
@@ -25,6 +25,9 @@ namespace NETCoreBot.Services
 
         public static void LogWatch(string system, string message)
             => Log(system, message, ConsoleColor.Magenta);
+
+        public static void LogFocus(string system, string message)
+            => LogFocus(system, message, ConsoleColor.Cyan);
 
         public static void LogBenchmark(string label, long ms)
         {
@@ -42,6 +45,17 @@ namespace NETCoreBot.Services
         {
             if (!Enabled) return;
             _buffer.Add(($"[{system}] {message}", color));
+        }
+
+        private static void LogFocus(string system, string message, ConsoleColor color)
+        {
+ 
+
+            var previousColor = Console.ForegroundColor;
+            Console.ForegroundColor = color;
+            Console.WriteLine($"[{system}] {message}");
+            Console.ForegroundColor = previousColor;
+
         }
 
         public static IDisposable Benchmark(string label)

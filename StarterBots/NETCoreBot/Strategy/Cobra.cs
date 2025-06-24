@@ -77,10 +77,10 @@ namespace NETCoreBot.Strategy
 
         public static double ALPHA = 1.3;
         public static int MAX_PELLET_CANDIDATES = 5;
-        public static int DFSDEPTH = 50;
+        public static int DFSDEPTH = 30;
         public static int MAX_CLUSTER_SIZE = 8; // Maximum size of a cluster to consider
 
-        public static int MAX_CLUSTER_PELLETS_LIMIT = 50;
+        public static int MAX_CLUSTER_PELLETS_LIMIT = 30;
 
 
         //locked
@@ -154,7 +154,14 @@ namespace NETCoreBot.Strategy
                 }
             }
 
-
+            using (GameLogger.Benchmark("[Event] Warm up"))
+            {
+                var warmUpEventResult = WarmUpEvent();
+                if (warmUpEventResult != null)
+                { 
+                    return FinaliseAction(warmUpEventResult);
+                }
+            }
 
 
             #region Maps
@@ -613,6 +620,28 @@ namespace NETCoreBot.Strategy
             else if (PortalRight)
                 yield return (0, y);
         }
+        private static IEnumerable<(int x, int y)> GetNeighborsZK(int x, int y)
+        {
+            // Up
+            if (y > 0)
+                yield return (x, y - 1);
+
+
+            // Down
+            if (y < MapHeight - 1)
+                yield return (x, y + 1);
+
+
+            // Left
+            if (x > 0)
+                yield return (x - 1, y);
+
+
+            // Right
+            if (x < MapWidth - 1)
+                yield return (x + 1, y);
+
+        }
         public static bool IsWalkable(int x, int y, bool includeZookeeper = true)
         {
             // basic grid check
@@ -706,6 +735,15 @@ namespace NETCoreBot.Strategy
             }
 
             return BotAction.Up;
+        }
+        public static BotCommand? WarmUpEvent()
+        {
+            if (GAME_STAGE == GameStage.WarmUp)
+            {
+                return GetFirstMoveToClosestPellet(ME.X,ME.Y);
+            }
+
+            return null;
         }
         public static BotCommand? PortalEvalEvent()
         {
@@ -867,7 +905,25 @@ namespace NETCoreBot.Strategy
         }
 
         #region Zookeeper avoidance logic
+        public static bool IsZookeeperNear(Animal myAnimal)
+        {
+            // Loop through each zookeeper in the game state.
+            foreach (var zk in GAME_STATE.Zookeepers)
+            {
+                int distance = ManhattanDistance(myAnimal.X, myAnimal.Y, zk.X, zk.Y);
+                if (distance <= (SAFE_DISTANCE * 2))
+                {
 
+                    var pathToMe = FindPathZookeeper(zk.X, zk.Y, myAnimal.X, myAnimal.Y, GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content));
+                    if (pathToMe != null && pathToMe.Count <= SAFE_DISTANCE)
+                    {
+                        return true;
+                    }
+                }
+
+            }
+            return false;
+        }
 
         public static List<CobraNode>? FindPathZookeeper(
             int startX,
@@ -981,6 +1037,351 @@ namespace NETCoreBot.Strategy
             }
         }
 
+
+
+        public static BotCommand? EscapeZookeeper(Animal myAnimal)
+        {
+
+            // 1. Find the closest zookeeper.
+            if (GAME_STATE.Zookeepers == null || GAME_STATE.Zookeepers.Count == 0)
+                return null;
+
+            Zookeeper closestZookeeper = null;
+            int minDistance = int.MaxValue;
+            foreach (var zk in GAME_STATE.Zookeepers)
+            {
+                int d = ManhattanDistance(myAnimal.X, myAnimal.Y, zk.X, zk.Y);
+                if (d < minDistance)
+                {
+                    minDistance = d;
+                    closestZookeeper = zk;
+                }
+            }
+            if (closestZookeeper == null)
+                return null;
+
+            // 2. Compute relative direction.
+            int deltaX = myAnimal.X - closestZookeeper.X;
+            int deltaY = myAnimal.Y - closestZookeeper.Y;
+
+            int targetX = myAnimal.X;
+            int targetY = myAnimal.Y;
+
+            // Choose horizontal escape if horizontal difference is greater.
+            if (Math.Abs(deltaX) > Math.Abs(deltaY))
+            {
+                if (deltaX > 0)
+                {
+                    // Zookeeper is to the left; use right edge if enabled.
+                    targetX = PortalRight ? MapWidth - 1 : myAnimal.X;
+                }
+                else
+                {
+                    // Zookeeper is to the right; use left edge if enabled.
+                    targetX = PortalLeft ? 0 : myAnimal.X;
+                }
+                targetY = myAnimal.Y;
+            }
+            else
+            {
+                // Vertical escape.
+                if (deltaY > 0)
+                {
+                    // Zookeeper is above; use bottom edge if enabled.
+                    targetY = PortalDown ? MapHeight - 1 : myAnimal.Y;
+                }
+                else
+                {
+                    // Zookeeper is below; use top edge if enabled.
+                    targetY = PortalUp ? 0 : myAnimal.Y;
+                }
+                targetX = myAnimal.X;
+            }
+
+            // 3. Find a portal cell on the chosen edge (filtering using IsPortalCell).
+            Cell? portalTarget = null;
+
+
+            var allPortalCellsOrdered = GAME_STATE.Cells
+                    .Where(c => IsPortalCell(c) && c.Content != CellContent.Wall)
+                    .OrderBy(c => ManhattanDistance(myAnimal.X, myAnimal.Y, c.X, c.Y))
+                    .ToList();
+
+            if (ManhattanDistance(myAnimal.X, myAnimal.Y, allPortalCellsOrdered.FirstOrDefault().X, allPortalCellsOrdered.FirstOrDefault().Y) < SAFE_DISTANCE && (ManhattanDistance(myAnimal.X, myAnimal.Y, allPortalCellsOrdered.FirstOrDefault().X, allPortalCellsOrdered.FirstOrDefault().Y) > ManhattanDistance(myAnimal.X, myAnimal.Y, closestZookeeper.X, closestZookeeper.Y)))
+            {
+                portalTarget = allPortalCellsOrdered.FirstOrDefault();
+            }
+            else if (Math.Abs(deltaX) > Math.Abs(deltaY))
+            {
+                // Horizontal escape: filter all portal cells on the target edge (left or right).
+                int edgeX = (deltaX > 0 && PortalRight) ? MapWidth - 1 :
+                            (deltaX <= 0 && PortalLeft) ? 0 : -1;
+
+                if (edgeX != -1)
+                {
+                    portalTarget = allPortalCellsOrdered
+                        .Where(c => c.X == edgeX)
+                        .OrderBy(c => ManhattanDistance(myAnimal.X, myAnimal.Y, c.X, c.Y))
+                        .FirstOrDefault();
+                }
+            }
+            else
+            {
+                // Vertical escape: filter all portal cells on the target edge (up or down).
+                int edgeY = (deltaY > 0 && PortalDown) ? MapHeight - 1 :
+                            (deltaY <= 0 && PortalUp) ? 0 : -1;
+
+                if (edgeY != -1)
+                {
+                    portalTarget = allPortalCellsOrdered
+                        .Where(c => c.Y == edgeY)
+                        .OrderBy(c => ManhattanDistance(myAnimal.X, myAnimal.Y, c.X, c.Y))
+                        .FirstOrDefault();
+                }
+            }
+
+            if (portalTarget == null)
+            {
+                //LogMessage("No valid portal target found.", ConsoleColor.Green);
+                return null;
+            }
+
+            // 4. Compute a path to the portal target.
+            var grid = GAME_STATE.Cells.ToDictionary(c => (c.X, c.Y), c => c.Content);
+            var path = FindPath(myAnimal.X, myAnimal.Y, portalTarget.X, portalTarget.Y);
+            if (path == null || path.Count == 0)
+            {
+                //LogMessage("No path found to portal.", ConsoleColor.Green);
+                return null;
+            }
+
+
+
+            // Find highest-scoring opponent
+            var topOpponent = GAME_STATE.Animals.Where(x => x.Id != myAnimal.Id).OrderByDescending(o => o.Score).FirstOrDefault();
+            double opponentScore = topOpponent?.Score ?? 0;
+
+            //if (GAME_STAGE == GameStage.EarlyGame)
+            //{
+            //    LogMessage("EarlyGame: Skipping escape. Death cost is low.", ConsoleColor.Green);
+            //    return null;
+
+            //    //// Estimate the value of escaping vs. dying
+            //    //int ticksToEscape = path.Count;
+            //    //double averagePelletsPerTick = 0.4; // Tweak this based on testing/data
+            //    //double estimatedPelletsLost = ticksToEscape * averagePelletsPerTick;
+            //    //double pelletLossIfCaught = myAnimal.Score * 0.10;
+
+            //    //LogMessage($"Escape decision -> Pellets left {PELLETS_LEFT_PERCENTAGE:F1}%, TicksToEscape: {ticksToEscape}, EstPelletsLost: {estimatedPelletsLost:F1}, OnDeathLoss: {pelletLossIfCaught:F1}", ConsoleColor.Green);
+
+            //    //if (pelletLossIfCaught < estimatedPelletsLost)
+            //    //{
+            //    //    LogMessage("Not worth escaping - better to take the hit.", ConsoleColor.Green);
+            //    //    return null; // Don't escape, let the normal logic handle it
+            //    //}
+            //}
+
+            //LogMessage("EarlyGame: Skipping escape. Death cost is low.", ConsoleColor.Green);
+            //return null;
+
+            double hitLoss = myAnimal.Score * 0.10;
+            double scoreLeft = PELLETS_LEFT / 11;
+
+            if (GAME_STAGE == GameStage.MidGame)
+            {
+                if (myAnimal.Score < opponentScore)
+                {
+                    //LogMessage($"Escape decision -> Pellets left {PELLETS_LEFT_PERCENTAGE:F1}%, Hit Loss: {hitLoss:F1}, Score Left: {scoreLeft:F1}", ConsoleColor.Green);
+
+                    if (scoreLeft > hitLoss)
+                    {
+                        //LogMessage("Not worth escaping - better to take the hit.", ConsoleColor.Green);
+                        return null; // Don't escape, let the normal logic handle it
+                    }
+                }
+                else
+                {
+                    if ((myAnimal.Score - hitLoss) < opponentScore)
+                    {
+                        //will loose the lead
+                        // LogMessage($"Escape decision -> Keep the lead");
+                    }
+                    else
+                    {
+                        // LogMessage($"Escape decision -> Pellets left {PELLETS_LEFT_PERCENTAGE:F1}%, Hit Loss: {hitLoss:F1}, Score Left: {scoreLeft:F1}", ConsoleColor.Green);
+
+                        if (scoreLeft > hitLoss)
+                        {
+                            // LogMessage("Not worth escaping - better to take the hit.", ConsoleColor.Green);
+
+                        }
+                    }
+                }
+
+
+            }
+            else if (GAME_STAGE == GameStage.LateGame)
+            {
+                // LogMessage("LateGame: Always escape.", ConsoleColor.Green);
+            }
+
+
+
+            // 5. If the computed path has less than 2 nodes (we’re already at the portal),
+            // force an escape move that exits the portal.
+            if (path.Count < 2)
+            {
+                BotAction? escapeAction = null;
+                // Determine the escape direction based on which edge the portal cell is on.
+                if (portalTarget.X == 0 && PortalLeft)
+                    escapeAction = BotAction.Left;
+                else if (portalTarget.X == MapWidth - 1 && PortalRight)
+                    escapeAction = BotAction.Right;
+                else if (portalTarget.Y == 0 && PortalUp)
+                    escapeAction = BotAction.Up;
+                else if (portalTarget.Y == MapHeight - 1 && PortalDown)
+                    escapeAction = BotAction.Down;
+
+                if (escapeAction.HasValue)
+                {
+                    // LogMessage($"Tick: {GAME_STATE.Tick} | Escape move: {escapeAction.Value} (exiting portal)", ConsoleColor.Green);
+                    return new BotCommand { Action = escapeAction.Value };
+                }
+                else
+                {
+                    //LogMessage("No escape action computed.", ConsoleColor.Green);
+                    return null;
+                }
+            }
+
+            // 6. Otherwise, use the normal computed path.
+            PersistentPath = path;
+            var action = ComputeNextMove();
+            if (!action.HasValue)
+            {
+                //LogMessage("No action computed from escape path.", ConsoleColor.Green);
+                return null;
+            }
+
+            // Remove the first node (current position) from the persistent path.
+            PersistentPath.RemoveAt(0);
+
+            //LogMessage($"Tick: {GAME_STATE.Tick} | Action: {action.Value} | EscapeZookeeper => move to portal", ConsoleColor.Green);
+            return new BotCommand { Action = action.Value };
+        }
+
+        public static BotCommand? EscapeChasedZookeeper(Animal myAnimal)
+        {
+            // 1. Identify the closest zookeeper.
+            Zookeeper? closestZookeeper = null;
+            int minDistance = int.MaxValue;
+            foreach (var zk in GAME_STATE.Zookeepers)
+            {
+                int d = ManhattanDistance(myAnimal.X, myAnimal.Y, zk.X, zk.Y);
+                if (d < minDistance)
+                {
+                    minDistance = d;
+                    closestZookeeper = zk;
+                }
+            }
+            if (closestZookeeper == null)
+                return null;
+
+            // Estimate the value of escaping vs. dying
+            int ticksToEscape = 30;
+            double averagePelletsPerTick = 0.4; // Tweak this based on testing/data
+            double estimatedPelletsLost = ticksToEscape * averagePelletsPerTick;
+            double pelletLossIfCaught = myAnimal.Score * 0.10;
+
+
+            //LogMessage($"Escape decision -> TicksToEscape: {ticksToEscape}, EstPelletsLost: {estimatedPelletsLost:F1}, OnDeathLoss: {pelletLossIfCaught:F1}", ConsoleColor.Green);
+
+            if (pelletLossIfCaught < estimatedPelletsLost)
+            {
+                //LogMessage("Not worth escaping - better to take the hit.", ConsoleColor.Green);
+                return null; // Don't escape, let the normal logic handle it
+            }
+
+
+
+            // 2. Compute primary escape move.
+            int dx = myAnimal.X - closestZookeeper.X;
+            int dy = myAnimal.Y - closestZookeeper.Y;
+            BotAction primaryAction = Math.Abs(dx) >= Math.Abs(dy)
+                ? (dx >= 0 ? BotAction.Right : BotAction.Left)
+                : (dy >= 0 ? BotAction.Down : BotAction.Up);
+
+            int newX = myAnimal.X, newY = myAnimal.Y;
+            switch (primaryAction)
+            {
+                case BotAction.Up:
+                    newY = myAnimal.Y - 1;
+                    break;
+                case BotAction.Down:
+                    newY = myAnimal.Y + 1;
+                    break;
+                case BotAction.Left:
+                    newX = myAnimal.X - 1;
+                    break;
+                case BotAction.Right:
+                    newX = myAnimal.X + 1;
+                    break;
+            }
+
+            // 3. Check if primary move is valid.
+            if (newX >= 0 && newX < MapWidth && newY >= 0 && newY < MapHeight)
+            {
+                var cell = GAME_STATE.Cells.FirstOrDefault(c => c.X == newX && c.Y == newY);
+                if (cell != null && cell.Content != CellContent.Wall &&
+                    cell.Content != CellContent.AnimalSpawn && cell.Content != CellContent.ZookeeperSpawn)
+                {
+                    //LogMessage($"Chased escape: moving {primaryAction}", ConsoleColor.Green);
+                    return new BotCommand { Action = primaryAction };
+                }
+            }
+
+            // 4. Fallback: Evaluate all valid directions.
+            BotAction? bestAction = null;
+            int bestDistance = minDistance;
+            foreach (BotAction action in new[] { BotAction.Up, BotAction.Down, BotAction.Left, BotAction.Right })
+            {
+                int altX = myAnimal.X, altY = myAnimal.Y;
+                switch (action)
+                {
+                    case BotAction.Up:
+                        altY = myAnimal.Y - 1;
+                        break;
+                    case BotAction.Down:
+                        altY = myAnimal.Y + 1;
+                        break;
+                    case BotAction.Left:
+                        altX = myAnimal.X - 1;
+                        break;
+                    case BotAction.Right:
+                        altX = myAnimal.X + 1;
+                        break;
+                }
+                if (altX < 0 || altX >= MapWidth || altY < 0 || altY >= MapHeight)
+                    continue;
+                var altCell = GAME_STATE.Cells.FirstOrDefault(c => c.X == altX && c.Y == altY);
+                if (altCell == null || altCell.Content == CellContent.Wall ||
+                    altCell.Content == CellContent.AnimalSpawn || altCell.Content == CellContent.ZookeeperSpawn)
+                    continue;
+                int newDist = ManhattanDistance(altX, altY, closestZookeeper.X, closestZookeeper.Y);
+                if (newDist > bestDistance)
+                {
+                    bestDistance = newDist;
+                    bestAction = action;
+                }
+            }
+            if (bestAction != null)
+            {
+                //LogMessage($"Chased escape alternative: moving {bestAction}", ConsoleColor.Green);
+                return new BotCommand { Action = bestAction.Value };
+            }
+            return null;
+        }
+
         #endregion
 
 
@@ -1057,7 +1458,7 @@ namespace NETCoreBot.Strategy
 
             if (GAME_STAGE == GameStage.EarlyGame)
             {
-                var bestCluster = FindBestClusterEarlyGame();
+                var bestCluster = FindBestClusterEarlyGameOP();
 
                 if (bestCluster != null && bestCluster.EntryPoint != null && bestCluster.Path != null && bestCluster.Path.Count > 0)
                 {
@@ -1123,6 +1524,53 @@ namespace NETCoreBot.Strategy
 
         }
 
+
+
+
+
+        //public static float ScoreCluster(CobraCluster cluster)
+        //{
+        //    if (cluster.Cells.Count == 0)
+        //        return 0;
+
+
+
+
+        //    int clusterSize = Math.Min(cluster.Cells.Count, MAX_CLUSTER_SIZE);
+        //    int dist = cluster.Cells.Min(c => ManhattanDistance(ME.X, ME.Y, c.X, c.Y));
+
+        //    float score = (float)(clusterSize - ALPHA * dist);
+
+        //    return score;
+        //}
+
+
+        //public static float ScoreCluster(CobraCluster cluster)
+        //{
+        //    if (cluster.Cells.Count == 0)
+        //        return 0;
+
+        //    int sumX = 0, sumY = 0;
+        //    foreach (var c in cluster.Cells)
+        //    {
+        //        sumX += c.X;
+        //        sumY += c.Y;
+        //    }
+        //    int clusterSize = cluster.Cells.Count;
+        //    int avgX = sumX / clusterSize;
+        //    int avgY = sumY / clusterSize;
+        //    int dist = Math.Abs(ME.X - avgX) + Math.Abs(ME.Y - avgY);
+        //    float score = (float)(clusterSize - ALPHA * dist);
+
+
+        //    //int clusterSize = cluster.Cells.Count;
+        //    //int dist = cluster.Cells.Min(c => ManhattanDistance(ME.X, ME.Y, c.X, c.Y));
+
+        //    //float score = (float)(clusterSize - ALPHA * dist);
+
+        //    return score;
+        //}
+
         public static BotCommand? FinaliseAction(BotCommand? command)
         {
             LastSentPosition = (ME.X, ME.Y); // Save starting position before the move is applied
@@ -1138,6 +1586,68 @@ namespace NETCoreBot.Strategy
 
         #endregion
 
+        #region Warm Up Fast
+
+        public static BotCommand? GetFirstMoveToClosestPellet(int startX, int startY)
+        {
+            int w = MapWidth, h = MapHeight;
+            var visited = new bool[w, h];
+            var q = new Queue<(int x, int y, BotAction first)>();
+
+            visited[startX, startY] = true;
+
+            // seed from start
+            foreach (var (dx, dy, action) in Directions)
+            {
+                int nx = startX + dx, ny = startY + dy;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                var content = GRID[(nx, ny)];
+                if (content == CellContent.Wall ||
+                    content == CellContent.AnimalSpawn ||
+                    content == CellContent.ZookeeperSpawn)
+                    continue;
+
+                visited[nx, ny] = true;
+                q.Enqueue((nx, ny, action));
+            }
+
+            // BFS to nearest pellet
+            while (q.Count > 0)
+            {
+                var (x, y, first) = q.Dequeue();
+                if (GRID[(x, y)] == CellContent.Pellet)
+                    return new BotCommand() { Action = first };
+
+                foreach (var (dx, dy, _) in Directions)
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                    if (visited[nx, ny]) continue;
+                    var content = GRID[(nx, ny)];
+                    if (content == CellContent.Wall ||
+                        content == CellContent.AnimalSpawn ||
+                        content == CellContent.ZookeeperSpawn)
+                        continue;
+
+                    visited[nx, ny] = true;
+                    q.Enqueue((nx, ny, first));
+                }
+            }
+
+            return null;
+        }
+
+        // static array for your four cardinal moves
+        static readonly (int dx, int dy, BotAction action)[] Directions = new[]
+        {
+                ( 0, -1, BotAction.Up),
+                ( 0,  1, BotAction.Down),
+                (-1,  0, BotAction.Left),
+                ( 1,  0, BotAction.Right)
+        };
+
+
+        #endregion
 
         #region Early Game Cluster Based
         public static CobraCluster FindBestClusterEarlyGame()
@@ -2798,6 +3308,257 @@ namespace NETCoreBot.Strategy
         #endregion
 
 
+        #region PATHFIND OPS
+
+        public static CobraCluster? FindBestClusterEarlyGameOP()
+        {
+            // Pull pellets once, no LINQ in hot path.
+            var pelletCells = GAME_STATE.Cells
+                                        .Where(c => c.Content is CellContent.Pellet or CellContent.PowerPellet)
+                                        .Select(c => new Pos(c.X, c.Y))
+                                        .ToList();
+            if (pelletCells.Count == 0) return null;
+
+            var visited = new HashSet<Pos>();
+            CobraCluster? bestCluster = null;
+
+            foreach (var pos in pelletCells)
+            {
+                if (!visited.Contains(pos))
+                {
+                    var cluster = BFSClusterEarlyGameOP(pos, visited);
+                    if (bestCluster == null || cluster.Score > bestCluster.Score)
+                        bestCluster = cluster;
+                }
+            }
+
+            if (bestCluster is null || bestCluster.Cells.Count == 0) return null;
+
+            // --- derive entry pellet & paths -------------------------------------
+            var entryPellet = bestCluster.Cells
+                                         .OrderBy(c => GetDistanceFromMe(c.X, c.Y))
+                                         .First();
+
+            var entryPath = FindPath(ME.X, ME.Y, entryPellet.X, entryPellet.Y) ?? new List<CobraNode>();
+
+            var clusterSet = bestCluster.Cells.Select(c => new Pos(c.X, c.Y)).ToHashSet();
+            var longest = FindLongestPelletPathInCluster3333(new Pos(entryPellet.X, entryPellet.Y), clusterSet);
+
+            // concat, skipping duplicate junction
+            if (entryPath.Count > 0 && longest.Count > 0 &&
+                entryPath[^1].X == longest[0].X && entryPath[^1].Y == longest[0].Y)
+            {
+                longest.RemoveAt(0);
+            }
+            entryPath.AddRange(longest);
+
+            return new CobraCluster
+            {
+                EntryPoint = new Cell { X = entryPath.Last().X, Y = entryPath.Last().Y, Content = CellContent.Pellet },
+                Cells = bestCluster.Cells,
+                Path = entryPath,
+                Score = bestCluster.Score
+            };
+        }
+        private static CobraCluster BFSClusterEarlyGameOP(Pos start, HashSet<Pos> visited)
+        {
+            // Rent from pools to cut allocations; return in finally.
+            var queue = ArrayPool<Pos>.Shared.Rent(MAX_CLUSTER_PELLETS_LIMIT_N);
+            var clusterCells = new List<Cell>(32);
+
+            int qHead = 0, qTail = 0;
+            queue[qTail++] = start;
+            visited.Add(start);
+
+            // Stats for scoring
+            int minDist = int.MaxValue,
+                minZkDist = int.MaxValue,
+                powerCount = 0;
+
+            while (qHead < qTail && clusterCells.Count < MAX_CLUSTER_PELLETS_LIMIT_N)
+            {
+                var cur = queue[qHead++];
+                if (!GRID.TryGetValue((cur.X, cur.Y), out var content)) continue;
+
+                clusterCells.Add(new Cell { X = cur.X, Y = cur.Y, Content = content });
+
+                if (DISTANCE_MAP.TryGetValue((cur.X, cur.Y), out var d))
+                    minDist = Math.Min(minDist, d);
+
+                var zk = GAME_STATE.Zookeepers.MinBy(z => GetDistanceFromZookeeper(z.Id, cur.X, cur.Y));
+                minZkDist = Math.Min(minZkDist, GetDistanceFromZookeeper(zk.Id, cur.X, cur.Y));
+
+                if (content == CellContent.PowerPellet) powerCount++;
+
+                // enqueue neighbors
+                foreach (var (dx, dy) in Dir4)
+                {
+                    var nxt = new Pos(cur.X + dx, cur.Y + dy);
+                    if (!visited.Contains(nxt) &&
+                        GRID.TryGetValue((nxt.X, nxt.Y), out var ncontent) &&
+                        (ncontent is CellContent.Pellet or CellContent.PowerPellet))
+                    {
+                        visited.Add(nxt);
+                        queue[qTail++] = nxt;
+                    }
+                }
+            }
+
+            // Cluster scoring (no second pass)
+            int size = Math.Min(clusterCells.Count, MAX_CLUSTER_SIZE_N);
+            float sizeVsDist = (float)(size - ALPHA * minDist);
+            float zkPenalty = (minZkDist < 5) ? (5 - minZkDist) : 0;
+            float powerBonus = ScorePowerPellet(powerCount);
+            float finalScore = sizeVsDist - zkPenalty + powerBonus;
+
+            // Return queue to pool
+            ArrayPool<Pos>.Shared.Return(queue, clearArray: false);
+
+            return new CobraCluster
+            {
+                Cells = clusterCells,
+                Score = finalScore,
+                // EntryPoint & Path filled later
+            };
+        }
+
+        private static List<CobraNode> FindLongestPathIterativeOP(Pos start, HashSet<Pos> cluster)
+        {
+            var best = new List<CobraNode>();
+            var stack = new Stack<(Pos pos, int idx, bool hasPower)>();
+            var path = new List<CobraNode>();
+            var visited = new HashSet<Pos>();
+
+            bool clusterHasPower = cluster.Any(p => IsPowerPellet(p.X, p.Y));
+            stack.Push((start, 0, IsPowerPellet(start.X, start.Y)));
+
+            while (stack.Count > 0)
+            {
+                var (cur, dirIdx, hasPower) = stack.Pop();
+
+                if (dirIdx == 0)
+                {
+                    // entering node
+                    visited.Add(cur);
+                    path.Add(new CobraNode(cur.X, cur.Y, 0, 0, null, 0, 0, 0, null));
+                    if ((clusterHasPower && hasPower) || !clusterHasPower)
+                    {
+                        if (path.Count > best.Count) best = new List<CobraNode>(path);
+                    }
+                }
+
+                // iterate neighbors
+                for (int i = dirIdx; i < Dir4.Length; i++)
+                {
+                    var nxt = new Pos(cur.X + Dir4[i].dx, cur.Y + Dir4[i].dy);
+
+                    if (cluster.Contains(nxt) &&
+                        !visited.Contains(nxt) &&
+                        !CONTESTED_CELLS_MAP.Contains((nxt.X, nxt.Y)) &&
+                        !CORRIDOR_CELLS_MAP.Contains((nxt.X, nxt.Y)) &&
+                        IsSafeFromZookeeper((nxt.X, nxt.Y)))
+                    {
+                        // push current with next dir index (backtracking point)
+                        stack.Push((cur, i + 1, hasPower));
+                        // push neighbor
+                        bool nxtPower = hasPower || IsPowerPellet(nxt.X, nxt.Y);
+                        stack.Push((nxt, 0, nxtPower));
+                        break; // simulate recursion
+                    }
+                }
+
+                // if no more neighbors explored
+                if (stack.Count == 0 || stack.Peek().pos.Equals(cur))
+                {
+                    visited.Remove(cur);
+                    path.RemoveAt(path.Count - 1);
+                }
+            }
+            return best;
+        }
+
+
+
+        private static List<CobraNode> FindLongestPelletPathInCluster3333(
+    Pos start,
+    HashSet<Pos> clusterSet)
+        {
+            if (clusterSet.Count <= 1)
+                return new List<CobraNode> { new CobraNode(start.X, start.Y, 0, 0, null, 0, 0, 0, null) };
+
+            bool clusterHasPower = clusterSet.Any(p => IsPowerPellet(p.X, p.Y));
+
+            // single BFS from `origin`, returns farthest Pos + parent map
+            Pos Bfs(Pos origin, out Dictionary<Pos, Pos> parent)
+            {
+                parent = new Dictionary<Pos, Pos>(clusterSet.Count);
+                var q = new Queue<Pos>();
+                q.Enqueue(origin);
+                parent[origin] = origin;
+
+                Pos last = origin;
+
+                while (q.Count > 0)
+                {
+                    last = q.Dequeue();
+
+                    foreach (var (dx, dy) in Dir4)
+                    {
+                        var nxt = new Pos(last.X + dx, last.Y + dy);
+
+                        if (!clusterSet.Contains(nxt) || parent.ContainsKey(nxt) ||
+                            CONTESTED_CELLS_MAP.Contains(nxt) || CORRIDOR_CELLS_MAP.Contains(nxt) ||
+                            !IsSafeFromZookeeper(nxt))
+                            continue;
+
+                        parent[nxt] = last;
+                        q.Enqueue(nxt);
+                    }
+                }
+                return last;          // farthest reachable from origin
+            }
+
+            // ---------- run BFS from the entry pellet --------------------
+            var far = Bfs(start, out var par);
+
+            // --------- ensure power-pellet inclusion if needed -----------
+            if (clusterHasPower &&
+                !PathHasPower(far, par))
+            {
+                //  jump to the nearest power pellet, then walk again
+                var bestPower = clusterSet
+                                .Where(c => IsPowerPellet(c.X, c.Y))
+                                .OrderBy(c => GetDistanceFromMe(c.X, c.Y))
+                                .First();
+                far = Bfs(bestPower, out par);
+            }
+
+            // ---------- rebuild path start → far -------------------------
+            var rev = new List<CobraNode>();
+            for (var cur = far; ; cur = par[cur])
+            {
+                rev.Add(new CobraNode(cur.X, cur.Y, 0, 0, null, 0, 0, 0, null));
+                if (cur.Equals(start)) break;
+            }
+            rev.Reverse();
+            return rev;
+
+            // --- local helper -------------------------------------------
+            bool PathHasPower(Pos end, Dictionary<Pos, Pos> tree)
+            {
+                var cur = end;
+                while (!cur.Equals(tree[cur]))
+                {
+                    if (IsPowerPellet(cur.X, cur.Y)) return true;
+                    cur = tree[cur];
+                }
+                return IsPowerPellet(cur.X, cur.Y);
+            }
+        }
+
+
+
+        #endregion  
 
     }
 

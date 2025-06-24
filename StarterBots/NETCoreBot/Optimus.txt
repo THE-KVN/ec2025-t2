@@ -1,0 +1,14 @@
+﻿
+The idea around optimus is the following:
+
+Build a bot that runs which has the lowest tick without pellet count possible.
+
+1. Visibility
+### Calculate if the move we are sending will collect a pellet or not (include power ups).
+
+### If it does:
+#### Log (Green) collecting a pellet
+
+### If it does not:
+#### Increate the TicksWithoutPelletCount by 1
+#### Log (Red) the reason why we are not collecting a pellet

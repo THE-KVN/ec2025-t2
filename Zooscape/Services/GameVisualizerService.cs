@@ -45,21 +45,22 @@ public class GameVisualizerService
                 a.IsViable,
                 a.TimeInCage,
                 AverageExecutionTime = "0",
-                CurrentTargetPellet = Gorilla.PersistentTarget != null ? new { Gorilla.PersistentTarget.X, Gorilla.PersistentTarget.Y } : null,
-                PersistentPath = Gorilla.PersistentPath?.Select(n => new { n.X, n.Y }),
-                ContestedPelletsThisTick = Gorilla.CONTESTED_CELLS_MAP.Select(p => new { p.Item1, p.Item2 }),
-                CorridorCells = Gorilla.CORRIDOR_CELLS_MAP.Select(c => new { c.Item1, c.Item2 }),
-                IsInDanger = Gorilla.IsInDanger,
-                GameStage = Gorilla.GAME_STAGE.ToString(),
-                LastMove = Gorilla.LastMove.ToString(),
+                CurrentTargetPellet = Optimus.PersistentTarget != null ? new { Optimus.PersistentTarget.X, Optimus.PersistentTarget.Y } : null,
+                PersistentPath = Optimus.PersistentPath?.Select(n => new { n.X, n.Y }),
+                ContestedPelletsThisTick = Optimus.CONTESTED_CELLS_MAP.Select(p => new { p.Item1, p.Item2 }),
+                CorridorCells = Optimus.CORRIDOR_CELLS_MAP.Select(c => new { c.Item1, c.Item2 }),
+                IsInDanger = Optimus.IsInDanger,
+                GameStage = Optimus.GAME_STAGE.ToString(),
+                LastMove = Optimus.LastMove.ToString(),
                 a.Location,
                 a.CurrentDirection,
-                ExecutionTimeExceedCount = Gorilla.ExecutionTimeExceedCount,
+                ExecutionTimeExceedCount = Optimus.ExecutionTimeExceedCount,
                 CurrentMultiplier = a.ScoreStreak.Multiplier,
-                BestCluster = Gorilla.BestCluster,
-                SafetyNetMap = Gorilla.SAFETY_NET_MAP?.Select(c => new { c.Item1, c.Item2 }),
+                BestCluster = Optimus.BestCluster,
+                SafetyNetMap = Optimus.SAFETY_NET_MAP?.Select(c => new { c.Item1, c.Item2 }),
                 HeldPowerUp = a.HeldPowerUp.HasValue ? a.HeldPowerUp.Value.ToString() : "none",
                 ActivePowerUp = a.ActivePowerUp != null ? a.ActivePowerUp.Value.ToString() : "none",
+                
             }),
             zookeepers = _gameStateService.Zookeepers.Values.Select(z => new
             {
@@ -73,8 +74,9 @@ public class GameVisualizerService
                 CurrentPath = z.CurrentPath?.Nodes.Select(n => new { n.Coords.X, n.Coords.Y })
             }),
             Tick = _gameStateService.TickCounter,
-            Width = Gorilla.MapWidth,
-            Height = Gorilla.MapHeight
+            Width = Optimus.MapWidth,
+            Height = Optimus.MapHeight,
+            Waste = Optimus.WasteManagement
         };
 
        

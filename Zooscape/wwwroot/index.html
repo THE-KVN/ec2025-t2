@@ -25,13 +25,15 @@
             margin-bottom: 20px;
         }
 
-        #animalTable, #zookeeperTable, animalTableM {
+        #animalTable, #zookeeperTable, #wasteTable, animalTableM {
+            margin-top: 20px;
             margin-left: 20px;
             border-collapse: collapse;
         }
 
             #animalTable th, #animalTable td,
             #zookeeperTable th, #zookeeperTable td,
+            #wasteTable th, #wasteTable td,
             #animalTableM th, #animalTableM td {
                 border: 1px solid white;
                 padding: 8px;
@@ -75,6 +77,28 @@
             </thead>
             <tbody></tbody>
         </table>
+
+        <table id="wasteTable">
+            <thead>
+                <tr>
+                    <th>Total</th>
+                    <th>PerformanceIssues</th>
+                    <th>PortalRuns</th>
+                    <th>Escaping</th>
+                    <th>Contesting</th>
+                    <th>PlanningIssues</th>
+                    <th>PathFindingIssues</th>
+                    <th>Respawning</th>
+                    <th>MovingIssues</th>
+                    <th>PowerUps</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+
+
+
 
 
 
@@ -241,8 +265,23 @@
             });
 
 
+            const wasteTableBody = document.getElementById("wasteTable").querySelector("tbody");
+            wasteTableBody.innerHTML = "";
+            const wrow = document.createElement("tr");
+            wrow.innerHTML = `
+                <td>${gameState.waste.totalWaste}</td>
+                <td>${gameState.waste.performanceIssues}</td>
+                <td>${gameState.waste.portalRuns}</td>
+                <td>${gameState.waste.escaping}</td>
+                <td>${gameState.waste.contesting}</td>
+                <td>${gameState.waste.planningIssues}</td>
+                <td>${gameState.waste.pathFindingIssues}</td>
+                <td>${gameState.waste.respawning}</td>
+                <td>${gameState.waste.movingIssues}</td>
+                <td>${gameState.waste.powerUps}</td>
+            `;
 
-
+            wasteTableBody.appendChild(wrow);
 
         });
 
